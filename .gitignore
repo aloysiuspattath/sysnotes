@@ -25,3 +25,6 @@ append_*.py
 force_light_quill.py
 inject_ui.py
 move_ui.py
+
+# Python virtual environment
+venv/
