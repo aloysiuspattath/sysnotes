@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SysNotes — A premium sysadmin commands and notes manager. Organize, search, and share system administration commands and documentation.">
+    <title>SysNotes — Sysadmin Commands &amp; Notes</title>
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    
+    <!-- Offline Dependencies -->
+    <link rel="stylesheet" href="/static/vendor/quill/quill.snow.css">
+    <script src="/static/vendor/quill/quill.js"></script>
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/vendor/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/index.css?v=15">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════ -->
+    <!-- SIDEBAR                                 -->
+    <!-- ═══════════════════════════════════════ -->
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-inner">
+
+            <!-- Branding -->
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                </div>
+                <span class="sidebar-brand-text">SysNotes</span>
+                <button id="sidebar-close-btn" class="sidebar-close-btn" aria-label="Close sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Search moved to top bar -->
+
+            <!-- Stats -->
+            <div class="sidebar-section sidebar-stats">
+                <div class="sidebar-section-label">Overview</div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-notes">0</span>
+                        <span class="stat-label">Notes</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-categories">0</span>
+                        <span class="stat-label">Categories</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="stat-tags">0</span>
+                        <span class="stat-label">Tags</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories -->
+            <div class="sidebar-section sidebar-categories">
+                <div class="sidebar-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    Categories
+                </div>
+                <ul id="categories-list" class="category-list">
+                    <!-- populated by JS -->
+                </ul>
+            </div>
+
+            <!-- Tags -->
+            <div class="sidebar-section sidebar-tags">
+                <div class="sidebar-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                    Tags
+                </div>
+                <div id="tags-container" class="tags-cloud">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+
+            <!-- Theme toggle -->
+            <div class="sidebar-footer">
+                <button id="theme-toggle-btn" class="theme-toggle-btn" aria-label="Toggle theme">
+                    <span id="theme-icon-sun" class="theme-icon" style="display:none;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </span>
+                    <span id="theme-icon-moon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </span>
+                    <span class="theme-toggle-label" id="theme-toggle-label">Dark Mode</span>
+                </button>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- Sidebar overlay for mobile -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- ═══════════════════════════════════════ -->
+    <!-- MAIN CONTENT                            -->
+    <!-- ═══════════════════════════════════════ -->
+    <main id="main-content" class="main-content">
+
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button id="hamburger-btn" class="hamburger-btn" aria-label="Open sidebar">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+
+                <!-- View Toggle -->
+                <div class="view-toggle-group">
+                    
+                    <button class="view-toggle-btn" class="view-toggle-btn active" data-view="view-stack" title="Stack View">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                        </svg>
+                        <span>Stack</span>
+                    </button>
+                    <button class="view-toggle-btn" data-view="view-card" title="Card View">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
+                        <span>Cards</span>
+                    </button>
+                </div>
+
+                <!-- Filter indicator -->
+                <div id="filter-indicator" class="filter-indicator" style="display:none;">
+                    <span id="filter-indicator-text"></span>
+                    <button id="filter-clear-btn" class="filter-clear-btn" aria-label="Clear filter">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="top-bar-center">
+                <div class="top-search-wrapper">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="search-input" class="search-input" placeholder="Search commands… (Ctrl+K)" autocomplete="off" spellcheck="false">
+                </div>
+            </div>
+
+            <div class="top-bar-right">
+                <!-- Auth section: logged out -->
+                <div id="auth-logged-out" class="auth-section">
+                    <button id="login-btn" class="btn btn-primary btn-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                            <polyline points="10 17 15 12 10 7"></polyline>
+                            <line x1="15" y1="12" x2="3" y2="12"></line>
+                        </svg>
+                        Login
+                    </button>
+                </div>
+                <!-- Auth section: logged in -->
+                <div id="auth-logged-in" class="auth-section" style="display:none;">
+                    <span id="auth-username" class="auth-username"></span>
+                    <button id="add-note-btn" class="btn btn-primary btn-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Command
+                    </button>
+                    <button id="admin-btn" class="btn btn-secondary btn-sm" style="display:none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        Admin
+                    </button>
+                    <button id="logout-btn" class="btn btn-ghost btn-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Category Cards Grid -->
+        <div id="category-cards-grid" class="category-cards-grid">
+            <!-- populated by JS -->
+        </div>
+
+        <!-- Notes Container -->
+        <div id="notes-container" class="notes-container view-list">
+            <!-- populated by JS -->
+        </div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state" style="display:none;">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3;">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            <h3>No commands found</h3>
+            <p>Try adjusting your search or filters.</p>
+        </div>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- ADMIN PAGE (replaces main content)      -->
+        <!-- ═══════════════════════════════════════ -->
+        <div id="admin-page" class="admin-page" style="display:none;">
+            <div class="admin-page-header">
+                <button id="admin-back-btn" class="btn btn-ghost btn-sm">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Back to Dashboard
+                </button>
+                <h1 class="admin-page-title">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Admin Settings
+                </h1>
+            </div>
+
+            <!-- Admin Page Tabs -->
+            <div class="admin-page-tabs">
+                <button class="admin-page-tab active" data-tab="ap-categories-tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    Categories
+                </button>
+                <button class="admin-page-tab" data-tab="ap-users-tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    Users
+                </button>
+                <button class="admin-page-tab" data-tab="ap-settings-tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    Settings
+                </button>
+                <button class="admin-page-tab" data-tab="ap-backup-tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                    </svg>
+                    Backup
+                </button>
+                <button class="admin-page-tab" data-tab="ap-password-tab">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Password
+                </button>
+            </div>
+
+            <div class="admin-page-body">
+
+                <!-- Categories Tab -->
+                <div id="ap-categories-tab" class="admin-page-tab-content active">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Manage Categories</h3>
+                            <p class="admin-card-desc">Create, enable/disable, and delete categories. Disabled categories won't appear in the sidebar or dropdowns.</p>
+                        </div>
+                        <div class="admin-card-body">
+                            <div class="table-wrapper">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Notes</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ap-categories-tbody">
+                                        <!-- populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Create Category</h3>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-create-category-form" class="admin-form">
+                                <div class="form-row">
+                                    <div class="form-group" style="flex:1;">
+                                        <input type="text" id="ap-category-name" class="form-input" placeholder="Category name" required>
+                                    </div>
+                                    <div class="form-group" style="flex:0 0 auto;">
+                                        <button type="submit" class="btn btn-primary btn-sm">Create Category</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="ap-users-tab" class="admin-page-tab-content">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Existing Users</h3>
+                        </div>
+                        <div class="admin-card-body">
+                            <div class="table-wrapper">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Role</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ap-users-tbody">
+                                        <!-- populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Create User</h3>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-create-user-form" class="admin-form">
+                                <div class="form-row">
+                                    <div class="form-group form-group-third">
+                                        <input type="text" id="ap-create-user-username" class="form-input" placeholder="Username" required>
+                                    </div>
+                                    <div class="form-group form-group-third">
+                                        <input type="password" id="ap-create-user-password" class="form-input" placeholder="Password" required>
+                                    </div>
+                                    <div class="form-group form-group-third">
+                                        <select id="ap-create-user-role" class="form-input form-select">
+                                            <option value="user">User</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Create User</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="ap-settings-tab" class="admin-page-tab-content">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Reverse Proxy</h3>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-settings-form" class="admin-form">
+                                <div class="form-group">
+                                    <label for="ap-settings-proxy-url" class="form-label">Reverse Proxy URL</label>
+                                    <input type="text" id="ap-settings-proxy-url" class="form-input" placeholder="e.g. https://notes.example.com">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="admin-card" style="margin-top: 1.5rem;">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">System Cache</h3>
+                            <p class="admin-card-desc">Clear frontend cache to ensure the latest updates are visible.</p>
+                        </div>
+                        <div class="admin-card-body">
+                            <button id="ap-clear-cache-btn" class="btn btn-secondary btn-sm">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 4.47-10.45L2 8"></path>
+                                </svg>
+                                Force Clear Cache
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backup Tab -->
+                <div id="ap-backup-tab" class="admin-page-tab-content">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Auto-Backup Settings</h3>
+                            <p class="admin-card-desc">Configure automated daily database backups.</p>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-backup-settings-form" class="admin-form">
+                                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="ap-autobackup-enabled" value="1">
+                                    <label for="ap-autobackup-enabled" class="form-label" style="margin: 0;">Enable Daily Auto-Backup</label>
+                                </div>
+                                <div class="form-group" style="max-width: 200px;">
+                                    <label for="ap-backup-retention" class="form-label">Retention (Days)</label>
+                                    <input type="number" id="ap-backup-retention" class="form-input" min="1" max="365" value="7">
+                                </div>
+                                <div class="form-group" style="max-width: 400px;">
+                                    <label for="ap-backup-location" class="form-label">Backup Location (Directory)</label>
+                                    <input type="text" id="ap-backup-location" class="form-input" placeholder="e.g. backups or /var/backups">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Save Backup Settings</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="admin-card" style="margin-top: 1.5rem;">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Manual Backup</h3>
+                            <p class="admin-card-desc">Download a full database backup as a .db file instantly.</p>
+                        </div>
+                        <div class="admin-card-body">
+                            <button id="ap-backup-download-btn" class="btn btn-primary btn-sm">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Download Backup
+                            </button>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Restore Backup</h3>
+                            <p class="admin-card-desc">Upload a previously downloaded .db file to restore.</p>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-restore-form" class="admin-form">
+                                <div class="form-group">
+                                    <input type="file" id="ap-restore-file" class="form-input form-file" accept=".db" required>
+                                </div>
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="16 16 12 12 8 16"></polyline>
+                                        <line x1="12" y1="12" x2="12" y2="21"></line>
+                                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+                                    </svg>
+                                    Restore Backup
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password Tab -->
+                <div id="ap-password-tab" class="admin-page-tab-content">
+                    <div class="admin-card">
+                        <div class="admin-card-header">
+                            <h3 class="admin-card-title">Change Password</h3>
+                        </div>
+                        <div class="admin-card-body">
+                            <form id="ap-change-password-form" class="admin-form">
+                                <div class="form-group">
+                                    <label for="ap-change-old-password" class="form-label">Current Password</label>
+                                    <input type="password" id="ap-change-old-password" class="form-input" placeholder="Enter current password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ap-change-new-password" class="form-label">New Password</label>
+                                    <input type="password" id="ap-change-new-password" class="form-input" placeholder="Enter new password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ap-change-confirm-password" class="form-label">Confirm New Password</label>
+                                    <input type="password" id="ap-change-confirm-password" class="form-input" placeholder="Confirm new password" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+
+    <!-- ═══════════════════════════════════════ -->
+    <!-- LOGIN MODAL                             -->
+    <!-- ═══════════════════════════════════════ -->
+    <div id="login-modal" class="modal-overlay" style="display:none;">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    Sign In
+                </h2>
+                <button class="modal-close-btn" data-modal="login-modal" aria-label="Close modal">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="login-form" class="modal-body">
+                <div class="form-group">
+                    <label for="login-username" class="form-label">Username</label>
+                    <input type="text" id="login-username" class="form-input" placeholder="Enter username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password" class="form-label">Password</label>
+                    <input type="password" id="login-password" class="form-input" placeholder="Enter password" required autocomplete="current-password">
+                </div>
+                <div id="login-error" class="form-error" style="display:none;"></div>
+                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD NOTE MODAL                          -->
+    <!-- ═══════════════════════════════════════ -->
+    <div id="add-note-modal" class="modal-overlay" style="display:none;">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Note
+                </h2>
+                <button class="modal-close-btn" data-modal="add-note-modal" aria-label="Close modal">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="add-note-form" class="modal-body">
+                <!-- Note type toggle -->
+                <div class="note-type-toggle">
+                    <button type="button" class="note-type-btn active" data-type="command" id="add-type-command">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                        Quick Command
+                    </button>
+                    <button type="button" class="note-type-btn" data-type="procedure" id="add-type-procedure">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        Procedure / Runbook
+                    </button>
+                    <button type="button" class="note-type-btn" data-type="plain" id="add-type-plain">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Plain Note
+                    </button>
+                </div>
+                <input type="hidden" id="add-note-type" value="command">
+
+                <div class="form-group">
+                    <label for="add-note-title" class="form-label">Title</label>
+                    <input type="text" id="add-note-title" class="form-input" placeholder="e.g. Restart standby database" required>
+                </div>
+
+                <!-- Quick command section -->
+                <div id="add-command-section">
+                    <div class="form-group">
+                        <label for="add-note-command" class="form-label">Command</label>
+                        <textarea id="add-note-command" class="form-input form-textarea form-mono" placeholder="e.g. df -h" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="add-note-description" class="form-label">Description <span class="form-hint">(optional)</span></label>
+                        <textarea id="add-note-description" class="form-input form-textarea" placeholder="Explain what this command does…" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Images <span class="form-hint">(optional)</span></label>
+                        <div class="image-upload-area" id="add-note-image-area">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            <span>Click to upload images</span>
+                            <input type="file" class="note-image-file-input" accept="image/*" multiple style="display:none;">
+                        </div>
+                        <div class="image-preview-row" id="add-note-image-previews"></div>
+                    </div>
+                </div>
+
+                <!-- Plain Note section -->
+                <div id="add-plain-section" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Note Content</label>
+                        <div id="add-note-plain" style="height: 200px; background-color: #ffffff; color: #333333;"></div>
+                    </div>
+                </div>
+
+                <!-- Procedure steps section -->
+                <div id="add-steps-section" style="display:none;">
+                    <div class="steps-header">
+                        <label class="form-label">Steps</label>
+                        <button type="button" class="btn btn-secondary btn-sm" id="add-step-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Add Step
+                        </button>
+                    </div>
+                    <div id="add-steps-list" class="steps-list"></div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group form-group-half">
+                        <label for="add-note-category" class="form-label">Category</label>
+                        <select id="add-note-category" class="form-input form-select">
+                            <option value="">None</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-half">
+                        <label for="add-note-tags" class="form-label">Tags <span class="form-hint">(comma separated)</span></label>
+                        <input type="text" id="add-note-tags" class="form-input" placeholder="e.g. oracle, restart, dg">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Save Note</button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════ -->
+    <!-- EDIT NOTE MODAL                         -->
+    <!-- ═══════════════════════════════════════ -->
+    <div id="edit-note-modal" class="modal-overlay" style="display:none;">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    Edit Note
+                </h2>
+                <button class="modal-close-btn" data-modal="edit-note-modal" aria-label="Close modal">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="edit-note-form" class="modal-body">
+                <input type="hidden" id="edit-note-id">
+                <!-- Note type toggle -->
+                <div class="note-type-toggle">
+                    <button type="button" class="note-type-btn active" data-type="command" id="edit-type-command">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                        Quick Command
+                    </button>
+                    <button type="button" class="note-type-btn" data-type="procedure" id="edit-type-procedure">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        Procedure / Runbook
+                    </button>
+                    <button type="button" class="note-type-btn" data-type="plain" id="add-type-plain">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Plain Note
+                    </button>
+                </div>
+                <input type="hidden" id="edit-note-type" value="command">
+
+                <div class="form-group">
+                    <label for="edit-note-title" class="form-label">Title</label>
+                    <input type="text" id="edit-note-title" class="form-input" placeholder="e.g. Restart standby database" required>
+                </div>
+
+                <!-- Quick command section -->
+                <div id="edit-command-section">
+                    <div class="form-group">
+                        <label for="edit-note-command" class="form-label">Command</label>
+                        <textarea id="edit-note-command" class="form-input form-textarea form-mono" placeholder="e.g. df -h" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-note-description" class="form-label">Description <span class="form-hint">(optional)</span></label>
+                        <textarea id="edit-note-description" class="form-input form-textarea" placeholder="Explain what this command does…" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Images <span class="form-hint">(optional)</span></label>
+                        <div class="image-upload-area" id="edit-note-image-area">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            <span>Click to upload images</span>
+                            <input type="file" class="note-image-file-input" accept="image/*" multiple style="display:none;">
+                        </div>
+                        <div class="image-preview-row" id="edit-note-image-previews"></div>
+                    </div>
+                </div>
+
+                <!-- Plain Note section -->
+                <div id="edit-plain-section" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Note Content</label>
+                        <div id="edit-note-plain" style="height: 200px; background-color: #ffffff; color: #333333;"></div>
+                    </div>
+                </div>
+
+                <!-- Procedure steps section -->
+                <div id="edit-steps-section" style="display:none;">
+                    <div class="steps-header">
+                        <label class="form-label">Steps</label>
+                        <button type="button" class="btn btn-secondary btn-sm" id="edit-step-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Add Step
+                        </button>
+                    </div>
+                    <div id="edit-steps-list" class="steps-list"></div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group form-group-half">
+                        <label for="edit-note-category" class="form-label">Category</label>
+                        <select id="edit-note-category" class="form-input form-select">
+                            <option value="">None</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group-half">
+                        <label for="edit-note-tags" class="form-label">Tags <span class="form-hint">(comma separated)</span></label>
+                        <input type="text" id="edit-note-tags" class="form-input" placeholder="e.g. oracle, restart, dg">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Update Note</button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════ -->
+    <!-- TOAST CONTAINER                         -->
+    <!-- ═══════════════════════════════════════ -->
+    <div id="toast-container" class="toast-container"></div>
+
+
+    <script src="/static/app.js?v=17"></script>
+</body>
+</html>
