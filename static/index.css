@@ -211,7 +211,7 @@ body {
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.5px;
-    color: #fff;
+    color: var(--sidebar-text);
 }
 
 .sidebar-close-btn {
@@ -226,8 +226,8 @@ body {
     transition: color var(--transition-fast), background var(--transition-fast);
 }
 .sidebar-close-btn:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--sidebar-text);
+    background: var(--sidebar-hover);
 }
 
 /* ─── Search ─────────────────────────────────────────── */
@@ -318,14 +318,14 @@ body {
     flex-direction: column;
     align-items: center;
     padding: 10px 4px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--sidebar-hover);
     border-radius: var(--radius-sm);
 }
 
 .stat-value {
     font-size: 1.2rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--sidebar-text);
     line-height: 1.2;
 }
 
@@ -368,7 +368,7 @@ body {
 
 .category-item.active {
     background: var(--sidebar-active);
-    color: #fff;
+    color: var(--sidebar-text);
     border-left-color: var(--accent);
     font-weight: 500;
 }
