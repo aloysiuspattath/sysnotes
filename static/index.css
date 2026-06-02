@@ -11,107 +11,107 @@
 
 /* ─── CSS CUSTOM PROPERTIES ──────────────────────────── */
 :root {
-    /* Light Theme — warm, easy on eyes */
-    --bg-primary: #f2f4f7;
-    --bg-secondary: #fafbfc;
-    --bg-sidebar: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-    --sidebar-text: #e2e8f0;
-    --sidebar-text-muted: #94a3b8;
-    --sidebar-hover: rgba(255, 255, 255, 0.06);
-    --sidebar-active: rgba(99, 102, 241, 0.15);
-    --sidebar-border: rgba(255, 255, 255, 0.06);
-    --text-primary: #2d3748;
-    --text-secondary: #718096;
-    --text-tertiary: #a0aec0;
-    --accent: #6366f1;
-    --accent-hover: #4f46e5;
-    --accent-glow: rgba(99, 102, 241, 0.13);
-    --accent-subtle: rgba(99, 102, 241, 0.07);
-    --danger: #e53e3e;
-    --danger-hover: #c53030;
-    --danger-bg: rgba(229, 62, 62, 0.07);
-    --success: #38a169;
-    --success-bg: rgba(56, 161, 105, 0.07);
-    --warning: #d97706;
-    --warning-bg: rgba(217, 119, 6, 0.07);
-    --code-bg: #1a202c;
-    --code-text: #68d391;
-    --code-highlight: rgba(99, 102, 241, 0.12);
-    --card-shadow: 0 1px 4px rgba(45, 55, 72, 0.07), 0 0 0 1px rgba(45,55,72,0.04);
-    --card-shadow-hover: 0 6px 24px rgba(45, 55, 72, 0.13);
-    --border: #e4e8ef;
-    --border-light: #edf0f5;
+    /* Apple Light Theme */
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-sidebar: #f5f5f7;
+    --sidebar-text: #1d1d1f;
+    --sidebar-text-muted: #86868b;
+    --sidebar-hover: rgba(0, 0, 0, 0.05);
+    --sidebar-active: rgba(0, 122, 255, 0.1);
+    --sidebar-border: rgba(0, 0, 0, 0.1);
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --text-tertiary: #98989d;
+    --accent: #007aff;
+    --accent-hover: #0062cc;
+    --accent-glow: rgba(0, 122, 255, 0.15);
+    --accent-subtle: rgba(0, 122, 255, 0.08);
+    --danger: #ff3b30;
+    --danger-hover: #d70015;
+    --danger-bg: rgba(255, 59, 48, 0.1);
+    --success: #34c759;
+    --success-bg: rgba(52, 199, 89, 0.1);
+    --warning: #ffcc00;
+    --warning-bg: rgba(255, 204, 0, 0.1);
+    --code-bg: #f5f5f7;
+    --code-text: #1d1d1f;
+    --code-highlight: rgba(0, 122, 255, 0.12);
+    --card-shadow: 0 4px 14px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.02);
+    --card-shadow-hover: 0 8px 30px rgba(0,0,0,0.12);
+    --border: #d2d2d7;
+    --border-light: #e5e5ea;
     --input-bg: #ffffff;
-    --overlay-bg: rgba(15, 23, 42, 0.45);
-    --toast-bg: #2d3748;
-    --toast-text: #f7fafc;
-    --topbar-bg: rgba(242, 244, 247, 0.88);
-    --topbar-border: #e4e8ef;
-    --tag-bg: rgba(99, 102, 241, 0.07);
-    --tag-text: #5a67d8;
-    --tag-border: rgba(99, 102, 241, 0.18);
-    --badge-bg: rgba(255, 255, 255, 0.1);
-    --note-cmd-border: rgba(99, 102, 241, 0.35);
-    --note-cmd-glow: rgba(99, 102, 241, 0.06);
+    --overlay-bg: rgba(0, 0, 0, 0.4);
+    --toast-bg: #1d1d1f;
+    --toast-text: #ffffff;
+    --topbar-bg: rgba(255, 255, 255, 0.72);
+    --topbar-border: #d2d2d7;
+    --tag-bg: rgba(0, 122, 255, 0.1);
+    --tag-text: #007aff;
+    --tag-border: rgba(0, 122, 255, 0.2);
+    --badge-bg: rgba(0, 0, 0, 0.05);
+    --note-cmd-border: rgba(0, 122, 255, 0.3);
+    --note-cmd-glow: rgba(0, 122, 255, 0.06);
 
     /* Sizing */
     --sidebar-width: 280px;
     --topbar-height: 60px;
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
     --radius-xl: 20px;
     --radius-full: 9999px;
 
     /* Typography */
-    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'SF Mono', 'SF Pro Icons', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
 
     /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition-base: 0.25s ease;
-    --transition-slow: 0.35s ease;
+    --transition-fast: 0.15s cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-base: 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-slow: 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 /* ─── DARK THEME ─────────────────────────────────────── */
 [data-theme="dark"] {
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #14141d;
-    --bg-sidebar: linear-gradient(180deg, #111118 0%, #0a0a0f 100%);
-    --sidebar-hover: rgba(255, 255, 255, 0.05);
-    --sidebar-active: rgba(168, 85, 247, 0.15);
-    --sidebar-border: rgba(255, 255, 255, 0.05);
-    --text-primary: #fafafa;
-    --text-secondary: #a1a1aa;
-    --text-tertiary: #71717a;
-    --accent: #a855f7;
-    --accent-hover: #9333ea;
-    --accent-glow: rgba(168, 85, 247, 0.25);
-    --accent-subtle: rgba(168, 85, 247, 0.12);
-    --danger: #f43f5e;
-    --danger-hover: #e11d48;
-    --danger-bg: rgba(244, 63, 94, 0.1);
-    --success: #10b981;
-    --success-bg: rgba(16, 185, 129, 0.1);
-    --code-bg: #09090b;
-    --code-text: #4ade80;
-    --code-highlight: rgba(168, 85, 247, 0.15);
-    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    --card-shadow-hover: 0 12px 30px rgba(0, 0, 0, 0.5);
-    --border: #27272a;
-    --border-light: #18181b;
-    --input-bg: #09090b;
-    --overlay-bg: rgba(0, 0, 0, 0.7);
-    --toast-bg: #27272a;
-    --toast-text: #fafafa;
-    --topbar-bg: rgba(10, 10, 15, 0.85);
-    --topbar-border: #27272a;
-    --tag-bg: rgba(168, 85, 247, 0.15);
-    --tag-text: #c084fc;
-    --tag-border: rgba(168, 85, 247, 0.3);
-    --badge-bg: rgba(255, 255, 255, 0.08);
-    --note-cmd-border: rgba(168, 85, 247, 0.45);
-    --note-cmd-glow: rgba(168, 85, 247, 0.1);
+    --bg-primary: #000000;
+    --bg-secondary: #1c1c1e;
+    --bg-sidebar: #000000;
+    --sidebar-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-active: rgba(10, 132, 255, 0.15);
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #f5f5f7;
+    --text-secondary: #86868b;
+    --text-tertiary: #636366;
+    --accent: #0a84ff;
+    --accent-hover: #007aff;
+    --accent-glow: rgba(10, 132, 255, 0.25);
+    --accent-subtle: rgba(10, 132, 255, 0.15);
+    --danger: #ff453a;
+    --danger-hover: #ff3b30;
+    --danger-bg: rgba(255, 69, 58, 0.15);
+    --success: #32d74b;
+    --success-bg: rgba(50, 215, 75, 0.15);
+    --code-bg: #1c1c1e;
+    --code-text: #32d74b;
+    --code-highlight: rgba(10, 132, 255, 0.15);
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    --card-shadow-hover: 0 12px 30px rgba(0, 0, 0, 0.8);
+    --border: #38383a;
+    --border-light: #2c2c2e;
+    --input-bg: #1c1c1e;
+    --overlay-bg: rgba(0, 0, 0, 0.65);
+    --toast-bg: #2c2c2e;
+    --toast-text: #f5f5f7;
+    --topbar-bg: rgba(28, 28, 30, 0.72);
+    --topbar-border: #38383a;
+    --tag-bg: rgba(10, 132, 255, 0.15);
+    --tag-text: #0a84ff;
+    --tag-border: rgba(10, 132, 255, 0.3);
+    --badge-bg: rgba(255, 255, 255, 0.1);
+    --note-cmd-border: rgba(10, 132, 255, 0.45);
+    --note-cmd-glow: rgba(10, 132, 255, 0.1);
 }
 
 /* ─── BASE ───────────────────────────────────────────── */
@@ -510,8 +510,8 @@ body {
     padding: 0 24px;
     height: var(--topbar-height);
     background: var(--topbar-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--topbar-border);
     transition: background var(--transition-slow), border-color var(--transition-slow);
 }
