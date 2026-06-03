@@ -750,9 +750,9 @@ body {
 /* ─── Card View ──────────────────────────────────────── */
 .notes-container.view-card {
     display: grid;
-    gap: 24px;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 20px;
+    align-items: start;
 }
 
 .notes-container.view-card .note-item {
@@ -772,6 +772,13 @@ body {
     transform: translateY(-3px);
     box-shadow: var(--card-shadow-hover);
     border-color: var(--note-cmd-border);
+}
+
+.notes-container.view-card .markdown-body {
+    max-height: 220px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent);
+    mask-image: linear-gradient(180deg, #000 70%, transparent);
 }
 
 /* ─── List View ──────────────────────────────────────── */
