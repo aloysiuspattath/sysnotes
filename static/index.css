@@ -217,7 +217,7 @@ body {
 }
 
 .sidebar-close-btn {
-    display: none;
+    display: flex;
     margin-left: auto;
     background: none;
     border: none;
@@ -452,8 +452,8 @@ body {
     gap: 10px;
     width: 100%;
     padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     color: var(--sidebar-text-muted);
     font-size: 0.85rem;
@@ -1551,6 +1551,8 @@ body {
    RESPONSIVE
    ═══════════════════════════════════════════════════════ */
 @media (min-width: 769px) {
+    .hamburger-btn { display: none; }
+    body.desktop-collapsed .hamburger-btn { display: flex; }
     body.desktop-collapsed .sidebar {
         transform: translateX(-100%);
     }
