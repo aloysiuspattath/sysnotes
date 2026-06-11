@@ -1233,7 +1233,14 @@
                 localStorage.setItem('sidebar-collapsed', document.body.classList.contains('desktop-collapsed') ? 'true' : 'false');
             }
         });
-        document.getElementById('sidebar-close-btn').addEventListener('click', closeSidebar);
+        document.getElementById('sidebar-close-btn').addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            } else {
+                document.body.classList.toggle('desktop-collapsed');
+                localStorage.setItem('sidebar-collapsed', document.body.classList.contains('desktop-collapsed') ? 'true' : 'false');
+            }
+        });
         document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
 
         // Keyboard shortcuts
