@@ -1112,6 +1112,9 @@
     //  INIT & EVENT LISTENERS
     // ═══════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('sidebar-collapsed') === 'true' && window.innerWidth > 768) {
+            document.body.classList.add('desktop-collapsed');
+        }
         const quillOptions = {
             theme: 'snow',
             modules: {
@@ -1222,7 +1225,14 @@
         });
 
         // Sidebar mobile
-        document.getElementById('hamburger-btn').addEventListener('click', openSidebar);
+        document.getElementById('hamburger-btn').addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                openSidebar();
+            } else {
+                document.body.classList.toggle('desktop-collapsed');
+                localStorage.setItem('sidebar-collapsed', document.body.classList.contains('desktop-collapsed') ? 'true' : 'false');
+            }
+        });
         document.getElementById('sidebar-close-btn').addEventListener('click', closeSidebar);
         document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
 

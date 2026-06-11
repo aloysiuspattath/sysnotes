@@ -539,7 +539,7 @@ body {
 
 /* Hamburger */
 .hamburger-btn {
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     padding: 6px;
@@ -1550,6 +1550,14 @@ body {
 /* ═══════════════════════════════════════════════════════
    RESPONSIVE
    ═══════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+    body.desktop-collapsed .sidebar {
+        transform: translateX(-100%);
+    }
+    body.desktop-collapsed .main-content {
+        margin-left: 0;
+    }
+}
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
