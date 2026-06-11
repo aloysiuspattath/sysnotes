@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SysNotes — Loading…</title>
+    <base href="{{ base_url }}">
     <meta name="description" content="Sysadmin note detail view">
     <style>
         /* ── Reset & tokens ─────────────────────────────── */
@@ -643,7 +644,7 @@
 
         // ── Fetch & init ──────────────────────────────────
         const noteId = {{ note_id }};
-        fetch('/api/notes/' + noteId)
+        fetch('api/notes/' + noteId)
             .then(r => {
                 if (!r.ok) throw new Error('Not found');
                 return r.json();

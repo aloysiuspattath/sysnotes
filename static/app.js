@@ -367,7 +367,7 @@
         thumb.innerHTML = `<img src="${img.url}" alt="${escapeHTML(img.name || '')}"><button type="button" class="img-remove-btn">${ICONS.close}</button>`;
         thumb.querySelector('.img-remove-btn').addEventListener('click', async () => {
             // Delete from server immediately
-            const res = await apiFetch(`/api/images/${img.id}`, {
+            const res = await apiFetch(`api/images/${img.id}`, {
                 method: 'DELETE',
                 headers: authHeaders()
             });
@@ -388,7 +388,7 @@
                 const fd = new FormData();
                 fd.append('file', thumb._file);
                 if (stepId) fd.append('step_id', stepId);
-                const res = await apiFetch(`/api/notes/${noteId}/images`, {
+                const res = await apiFetch(`api/notes/${noteId}/images`, {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + currentToken },
                     body: fd
@@ -411,7 +411,7 @@
 
     // ─── DATA FETCHING ───────────────────────────────────
     async function fetchNotes() {
-        let url = '/api/notes?';
+        let url = 'api/notes?';
         const params = [];
         const q = document.getElementById('search-input').value.trim();
         if (q) params.push('q=' + encodeURIComponent(q));
@@ -425,7 +425,7 @@
     }
 
     async function fetchCategories() {
-        const res = await apiFetch('/api/categories');
+        const res = await apiFetch('api/categories');
         if (!res) return;
         allCategories = await res.json();
         renderSidebarCategories(allCategories);
@@ -434,14 +434,14 @@
     }
 
     async function fetchTags() {
-        const res = await apiFetch('/api/tags');
+        const res = await apiFetch('api/tags');
         if (!res) return;
         allTags = await res.json();
         renderTags(allTags);
     }
 
     async function fetchStats() {
-        const res = await apiFetch('/api/stats');
+        const res = await apiFetch('api/stats');
         if (!res) return;
         const data = await res.json();
         const sn = document.getElementById('stat-notes');
@@ -622,7 +622,7 @@
                         <div class="note-header">
                             <div>
                                 ${typeBadge}
-                                <a href="/note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
                             </div>
                             ${actions}
                         </div>
@@ -649,7 +649,7 @@
                         <div class="note-header">
                             <div>
                                 ${typeBadgePlain}
-                                <a href="/note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
                             </div>
                             ${actions}
                         </div>
@@ -673,7 +673,7 @@
                         <div class="note-header">
                             <div>
                                 ${typeBadge}
-                                <a href="/note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
                             </div>
                             ${actions}
                         </div>
@@ -742,7 +742,7 @@
         const errorEl = document.getElementById('login-error');
         errorEl.style.display = 'none';
 
-        const res = await apiFetch('/api/login', {
+        const res = await apiFetch('api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
@@ -799,7 +799,7 @@
         if (noteType === 'command') body.command = command;
         if (noteType === 'procedure') body.steps = steps;
 
-        const res = await apiFetch('/api/notes', {
+        const res = await apiFetch('api/notes', {
             method: 'POST',
             headers: authHeaders(),
             body: JSON.stringify(body)
@@ -817,7 +817,7 @@
 
     async function deleteNote(id) {
         if (!confirm('Are you sure you want to delete this command?')) return;
-        const res = await apiFetch('/api/notes/' + id, { method: 'DELETE' });
+        const res = await apiFetch('api/notes/' + id, { method: 'DELETE' });
         if (res && res.ok) {
             showToast('Command deleted');
             fetchNotes();
@@ -888,7 +888,7 @@
         };
         if (categoryId) body.category_id = parseInt(categoryId);
 
-        const res = await apiFetch('/api/notes/' + noteId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
+        const res = await apiFetch('api/notes/' + noteId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to update note', true); return; }
 
@@ -900,7 +900,7 @@
 
         // Upload new step images
         if (noteType === 'procedure' && steps.length > 0) {
-            const noteRes2 = await apiFetch('/api/notes');
+            const noteRes2 = await apiFetch('api/notes');
             if (noteRes2 && noteRes2.ok) {
                 const allN = await noteRes2.json();
                 const updatedNote = allN.find(n => n.id == noteId);
@@ -926,7 +926,7 @@
     // ─── DELETE NOTE ─────────────────────────────────────
     async function deleteNote(noteId) {
         if (!confirm('Delete this note? This cannot be undone.')) return;
-        const res = await apiFetch('/api/notes/' + noteId, { method: 'DELETE', headers: authHeaders() });
+        const res = await apiFetch('api/notes/' + noteId, { method: 'DELETE', headers: authHeaders() });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to delete note', true); return; }
         showToast('Note deleted.'); refreshAll();
@@ -937,7 +937,7 @@
     // ═══════════════════════════════════════════════════════
 
     async function loadAdminCategories() {
-        const res = await apiFetch('/api/categories');
+        const res = await apiFetch('api/categories');
         if (!res) return;
         renderAdminCategories(await res.json());
     }
@@ -961,7 +961,7 @@
 
         tbody.querySelectorAll('.cat-toggle-input').forEach(input => {
             input.addEventListener('change', async () => {
-                const res = await apiFetch('/api/categories/' + input.dataset.catId + '/toggle', { method: 'PUT', headers: authHeaders() });
+                const res = await apiFetch('api/categories/' + input.dataset.catId + '/toggle', { method: 'PUT', headers: authHeaders() });
                 if (res && res.ok) { showToast('Category updated'); loadAdminCategories(); fetchCategories(); }
                 else { showToast('Failed to toggle category', true); loadAdminCategories(); }
             });
@@ -970,7 +970,7 @@
         tbody.querySelectorAll('.cat-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Delete this category? Notes will become uncategorized.')) return;
-                const res = await apiFetch('/api/categories/' + btn.dataset.catId, { method: 'DELETE', headers: authHeaders() });
+                const res = await apiFetch('api/categories/' + btn.dataset.catId, { method: 'DELETE', headers: authHeaders() });
                 if (res && res.ok) { showToast('Category deleted'); loadAdminCategories(); fetchCategories(); fetchStats(); }
                 else { showToast('Failed to delete category', true); }
             });
@@ -981,7 +981,7 @@
         e.preventDefault();
         const name = document.getElementById('ap-category-name').value.trim();
         if (!name) return;
-        const res = await apiFetch('/api/categories', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name }) });
+        const res = await apiFetch('api/categories', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name }) });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to create category', true); return; }
         document.getElementById('ap-category-name').value = '';
@@ -989,7 +989,7 @@
     }
 
     async function loadAdminUsers() {
-        const res = await apiFetch('/api/users', { headers: authHeaders() });
+        const res = await apiFetch('api/users', { headers: authHeaders() });
         if (!res || !res.ok) return;
         renderAdminUsers(await res.json());
     }
@@ -1010,7 +1010,7 @@
         tbody.querySelectorAll('.user-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Delete this user?')) return;
-                const res = await apiFetch('/api/users/' + btn.dataset.userId, { method: 'DELETE', headers: authHeaders() });
+                const res = await apiFetch('api/users/' + btn.dataset.userId, { method: 'DELETE', headers: authHeaders() });
                 if (res && res.ok) { showToast('User deleted.'); loadAdminUsers(); }
                 else { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to delete user', true); }
             });
@@ -1022,7 +1022,7 @@
         const username = document.getElementById('ap-create-user-username').value.trim();
         const password = document.getElementById('ap-create-user-password').value;
         const role = document.getElementById('ap-create-user-role').value;
-        const res = await apiFetch('/api/users', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ username, password, role }) });
+        const res = await apiFetch('api/users', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ username, password, role }) });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to create user', true); return; }
         document.getElementById('ap-create-user-form').reset();
@@ -1030,7 +1030,7 @@
     }
 
     async function loadAdminSettings() {
-        const res = await apiFetch('/api/settings', { headers: authHeaders() });
+        const res = await apiFetch('api/settings', { headers: authHeaders() });
         if (!res) return;
         const data = await res.json();
         const proxyInput = document.getElementById('ap-settings-proxy-url');
@@ -1049,7 +1049,7 @@
     async function handleSaveSettings(e) {
         e.preventDefault();
         const reverseProxyUrl = document.getElementById('ap-settings-proxy-url').value.trim();
-        const res = await apiFetch('/api/settings', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ reverse_proxy_url: reverseProxyUrl }) });
+        const res = await apiFetch('api/settings', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ reverse_proxy_url: reverseProxyUrl }) });
         if (res && res.ok) { showToast('Settings saved!'); }
         else { showToast('Failed to save settings', true); }
     }
@@ -1057,7 +1057,7 @@
     function handleBackupDownload() {
         if (!currentToken) return;
         const a = document.createElement('a');
-        a.href = '/api/backup?token=' + encodeURIComponent(currentToken);
+        a.href = 'api/backup?token=' + encodeURIComponent(currentToken);
         a.download = 'sysadmin_notes_backup.db';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         showToast('Downloading backup...');
@@ -1069,7 +1069,7 @@
         if (!fileInput.files[0]) return;
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
-        const res = await apiFetch('/api/restore', { method: 'POST', headers: { 'Authorization': 'Bearer ' + currentToken }, body: formData });
+        const res = await apiFetch('api/restore', { method: 'POST', headers: { 'Authorization': 'Bearer ' + currentToken }, body: formData });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Restore failed', true); return; }
         showToast('Database restored! Refreshing...'); fileInput.value = '';
@@ -1082,7 +1082,7 @@
         const newPassword = document.getElementById('ap-change-new-password').value;
         const confirmPassword = document.getElementById('ap-change-confirm-password').value;
         if (newPassword !== confirmPassword) { showToast('New passwords do not match!', true); return; }
-        const res = await apiFetch('/api/change-password', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }) });
+        const res = await apiFetch('api/change-password', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }) });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to change password', true); return; }
         document.getElementById('ap-change-password-form').reset();
@@ -1192,7 +1192,7 @@
             const enabled = document.getElementById('ap-autobackup-enabled').checked ? '1' : '0';
             const retention = document.getElementById('ap-backup-retention').value;
             const location = document.getElementById('ap-backup-location').value;
-            const res = await apiFetch('/api/settings', {
+            const res = await apiFetch('api/settings', {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify({ autobackup_enabled: enabled, backup_retention_days: retention, backup_location: location })

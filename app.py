@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from database import init_db, get_db, DATABASE_PATH, UPLOADS_DIR
@@ -31,10 +31,21 @@ init_db()
 if not os.environ.get('TESTING'):
     start_backup_service('sysadmin_notes.db')
 
+def get_base_url():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = 'reverse_proxy_url'")
+    row = cursor.fetchone()
+    conn.close()
+    url = row['value'] if row and row['value'] else '/'
+    if not url.endswith('/'):
+        url += '/'
+    return url
+
 # Serve Frontend SPA
 @app.route('/')
 def serve_index():
-    return send_from_directory('templates', 'index.html')
+    return render_template('index.html', base_url=get_base_url())
 
 # Serve uploaded images
 @app.route('/uploads/<path:filename>')
@@ -44,8 +55,7 @@ def serve_upload(filename):
 # Note detail page
 @app.route('/note/<int:note_id>')
 def note_detail_page(note_id):
-    from flask import render_template
-    return render_template('note_detail.html', note_id=note_id)
+    return render_template('note_detail.html', note_id=note_id, base_url=get_base_url())
 
 # Single note JSON API
 @app.route('/api/notes/<int:note_id>', methods=['GET'])
