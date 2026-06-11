@@ -76,8 +76,8 @@
 /* ─── DARK THEME ─────────────────────────────────────── */
 [data-theme="dark"] {
     --bg-primary: hsl(243, 44%, 18%);
-    --bg-secondary: hsl(243, 44%, 22%);
-    --bg-sidebar: hsl(243, 44%, 16%);
+    --bg-secondary: hsl(243, 44%, 24%); /* Lighter cards for better contrast */
+    --bg-sidebar: hsl(243, 44%, 12%); /* Darker sidebar for depth */
     --sidebar-hover: hsla(243, 44%, 30%, 0.5);
     --sidebar-active: rgba(225, 48, 241, 0.15);
     --sidebar-border: hsla(243, 44%, 25%, 0.5);
@@ -587,9 +587,9 @@ body {
 }
 
 .view-toggle-btn.active {
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.3);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent-glow);
 }
 
 .view-toggle-btn span {
@@ -603,7 +603,7 @@ body {
     gap: 6px;
     padding: 4px 10px 4px 12px;
     background: var(--accent-subtle);
-    border: 1px solid var(--tag-border);
+    border: 1px solid transparent;
     border-radius: var(--radius-full);
     font-size: 0.78rem;
     font-weight: 500;
@@ -1756,29 +1756,19 @@ body {
 }
 
 .category-card-all {
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    border-color: transparent;
-    color: #fff;
+    /* No solid background, let it inherit .category-card */
 }
 
 .category-card-all .category-card-icon {
-    background: rgba(255,255,255,0.2);
+    background: var(--accent);
     color: #fff;
-}
-
-.category-card-all .category-card-name,
-.category-card-all .category-card-count {
-    color: rgba(255,255,255,0.95);
-}
-
-.category-card-all:hover {
-    filter: brightness(1.1);
-    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .category-card-all.active {
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    box-shadow: 0 0 0 2px var(--accent-subtle), var(--card-shadow-hover);
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+    box-shadow: 0 0 0 1px var(--accent), var(--card-shadow);
 }
 
 /* ═══════════════════════════════════════════════════════
