@@ -11,48 +11,48 @@
 
 /* ─── CSS CUSTOM PROPERTIES ──────────────────────────── */
 :root {
-    /* Apple Light Theme */
-    --bg-primary: #f5f5f7;
+    /* Light Theme - Clean Dashboard (Nexus/Scribo Inspired) */
+    --bg-primary: #f3f4f6;
     --bg-secondary: #ffffff;
-    --bg-sidebar: #f5f5f7;
-    --sidebar-text: #1d1d1f;
-    --sidebar-text-muted: #86868b;
-    --sidebar-hover: rgba(0, 0, 0, 0.05);
-    --sidebar-active: rgba(0, 122, 255, 0.1);
-    --sidebar-border: rgba(0, 0, 0, 0.1);
-    --text-primary: #1d1d1f;
-    --text-secondary: #86868b;
-    --text-tertiary: #98989d;
-    --accent: #007aff;
-    --accent-hover: #0062cc;
-    --accent-glow: rgba(0, 122, 255, 0.15);
-    --accent-subtle: rgba(0, 122, 255, 0.08);
-    --danger: #ff3b30;
-    --danger-hover: #d70015;
-    --danger-bg: rgba(255, 59, 48, 0.1);
-    --success: #34c759;
-    --success-bg: rgba(52, 199, 89, 0.1);
-    --warning: #ffcc00;
-    --warning-bg: rgba(255, 204, 0, 0.1);
-    --code-bg: #f5f5f7;
-    --code-text: #1d1d1f;
-    --code-highlight: rgba(0, 122, 255, 0.12);
-    --card-shadow: 0 4px 14px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.02);
-    --card-shadow-hover: 0 8px 30px rgba(0,0,0,0.12);
-    --border: #d2d2d7;
-    --border-light: #e5e5ea;
+    --bg-sidebar: #ffffff;
+    --sidebar-text: #374151;
+    --sidebar-text-muted: #9ca3af;
+    --sidebar-hover: #f3f4f6;
+    --sidebar-active: #eef2ff;
+    --sidebar-border: #e5e7eb;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-tertiary: #9ca3af;
+    --accent: #6366f1; /* Vibrant Indigo */
+    --accent-hover: #4f46e5;
+    --accent-glow: rgba(99, 102, 241, 0.15);
+    --accent-subtle: rgba(99, 102, 241, 0.08);
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --danger-bg: rgba(239, 68, 68, 0.1);
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.1);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245, 158, 11, 0.1);
+    --code-bg: #f8fafc;
+    --code-text: #111827;
+    --code-highlight: rgba(99, 102, 241, 0.12);
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    --border: #e5e7eb;
+    --border-light: #f3f4f6;
     --input-bg: #ffffff;
-    --overlay-bg: rgba(0, 0, 0, 0.4);
-    --toast-bg: #1d1d1f;
+    --overlay-bg: rgba(17, 24, 39, 0.4);
+    --toast-bg: #1f2937;
     --toast-text: #ffffff;
-    --topbar-bg: rgba(255, 255, 255, 0.72);
-    --topbar-border: #d2d2d7;
-    --tag-bg: rgba(0, 122, 255, 0.1);
-    --tag-text: #007aff;
-    --tag-border: rgba(0, 122, 255, 0.2);
-    --badge-bg: rgba(0, 0, 0, 0.05);
-    --note-cmd-border: rgba(0, 122, 255, 0.3);
-    --note-cmd-glow: rgba(0, 122, 255, 0.06);
+    --topbar-bg: rgba(255, 255, 255, 0.85);
+    --topbar-border: #e5e7eb;
+    --tag-bg: rgba(99, 102, 241, 0.1);
+    --tag-text: #4f46e5;
+    --tag-border: rgba(99, 102, 241, 0.2);
+    --badge-bg: #f3f4f6;
+    --note-cmd-border: rgba(99, 102, 241, 0.3);
+    --note-cmd-glow: rgba(99, 102, 241, 0.06);
 
     /* Sizing */
     --sidebar-width: 280px;
@@ -75,43 +75,43 @@
 
 /* ─── DARK THEME ─────────────────────────────────────── */
 [data-theme="dark"] {
-    --bg-primary: #000000;
-    --bg-secondary: #1c1c1e;
-    --bg-sidebar: #000000;
-    --sidebar-hover: rgba(255, 255, 255, 0.1);
-    --sidebar-active: rgba(10, 132, 255, 0.15);
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --text-primary: #f5f5f7;
-    --text-secondary: #86868b;
-    --text-tertiary: #636366;
-    --accent: #0a84ff;
-    --accent-hover: #007aff;
-    --accent-glow: rgba(10, 132, 255, 0.25);
-    --accent-subtle: rgba(10, 132, 255, 0.15);
-    --danger: #ff453a;
-    --danger-hover: #ff3b30;
-    --danger-bg: rgba(255, 69, 58, 0.15);
-    --success: #32d74b;
-    --success-bg: rgba(50, 215, 75, 0.15);
-    --code-bg: #1c1c1e;
-    --code-text: #32d74b;
-    --code-highlight: rgba(10, 132, 255, 0.15);
-    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-    --card-shadow-hover: 0 12px 30px rgba(0, 0, 0, 0.8);
-    --border: #38383a;
-    --border-light: #2c2c2e;
-    --input-bg: #1c1c1e;
-    --overlay-bg: rgba(0, 0, 0, 0.65);
-    --toast-bg: #2c2c2e;
-    --toast-text: #f5f5f7;
-    --topbar-bg: rgba(28, 28, 30, 0.72);
-    --topbar-border: #38383a;
-    --tag-bg: rgba(10, 132, 255, 0.15);
-    --tag-text: #0a84ff;
-    --tag-border: rgba(10, 132, 255, 0.3);
-    --badge-bg: rgba(255, 255, 255, 0.1);
-    --note-cmd-border: rgba(10, 132, 255, 0.45);
-    --note-cmd-glow: rgba(10, 132, 255, 0.1);
+    --bg-primary: #0b0e14;
+    --bg-secondary: #151822;
+    --bg-sidebar: #0b0e14;
+    --sidebar-hover: rgba(255, 255, 255, 0.05);
+    --sidebar-active: rgba(255, 107, 0, 0.15);
+    --sidebar-border: rgba(255, 255, 255, 0.05);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-tertiary: #64748b;
+    --accent: #ff6b00; /* Neon Orange */
+    --accent-hover: #ff8533;
+    --accent-glow: rgba(255, 107, 0, 0.25);
+    --accent-subtle: rgba(255, 107, 0, 0.15);
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --danger-bg: rgba(239, 68, 68, 0.15);
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.15);
+    --code-bg: #1e2230;
+    --code-text: #34d399; /* Mint green code */
+    --code-highlight: rgba(255, 107, 0, 0.15);
+    --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --card-shadow-hover: 0 12px 40px rgba(255, 107, 0, 0.15);
+    --border: #2a2e3d;
+    --border-light: #1e2230;
+    --input-bg: #1e2230;
+    --overlay-bg: rgba(0, 0, 0, 0.75);
+    --toast-bg: #1e2230;
+    --toast-text: #f8fafc;
+    --topbar-bg: rgba(11, 14, 20, 0.85);
+    --topbar-border: #2a2e3d;
+    --tag-bg: rgba(255, 107, 0, 0.15);
+    --tag-text: #ff8533;
+    --tag-border: rgba(255, 107, 0, 0.3);
+    --badge-bg: rgba(255, 255, 255, 0.05);
+    --note-cmd-border: rgba(255, 107, 0, 0.45);
+    --note-cmd-glow: rgba(255, 107, 0, 0.1);
 }
 
 /* ─── BASE ───────────────────────────────────────────── */
