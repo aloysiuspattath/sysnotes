@@ -42,6 +42,23 @@ def get_base_url():
         url += '/'
     return url
 
+class ProxyDispatcherMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        # We need a new db connection per request for thread safety, 
+        # but calling get_base_url() inside WSGI middleware is safe.
+        prefix = get_base_url().rstrip('/')
+        if prefix and environ.get('PATH_INFO', '').startswith(prefix):
+            environ['PATH_INFO'] = environ['PATH_INFO'][len(prefix):]
+            if not environ['PATH_INFO']:
+                environ['PATH_INFO'] = '/'
+            environ['SCRIPT_NAME'] = prefix
+        return self.app(environ, start_response)
+
+app.wsgi_app = ProxyDispatcherMiddleware(app.wsgi_app)
+
 # Serve Frontend SPA
 @app.route('/')
 def serve_index():
