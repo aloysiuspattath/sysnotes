@@ -81,6 +81,8 @@
     --sidebar-hover: rgba(255, 255, 255, 0.05);
     --sidebar-active: rgba(99, 102, 241, 0.15);
     --sidebar-border: rgba(255, 255, 255, 0.08);
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: #a1a1aa;
     --text-primary: #ffffff;
     --text-secondary: #a1a1aa;
     --text-tertiary: #71717a;
