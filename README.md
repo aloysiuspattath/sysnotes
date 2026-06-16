@@ -1,298 +1,363 @@
 # SysNotes
 
-A comprehensive Flask-based note-taking application designed for system administrators and engineers to store, organize, and manage system administration knowledge, commands, procedures, and documentation.
+A comprehensive system administration notes application with a Python Flask backend and web-based frontend. SysNotes allows you to organize, search, and manage your system administration commands, procedures, and documentation.
 
-## 🎯 Overview
+**Author:** [@aloysiuspattath](https://github.com/aloysiuspattath)
 
-SysNotes is a web application that allows teams to collaboratively document system administration tasks, maintain command references, and store procedural knowledge in an organized, searchable manner. Whether it's storing frequently-used commands, documenting complex procedures with step-by-step guides, or maintaining plain text documentation, SysNotes provides a centralized platform.
+## Features
 
-## ✨ Features
+### 📝 Note Management
+- **Multiple Note Types:** Support for command notes, procedures (with steps), and plain text notes
+- **Rich Organization:** Categorize notes and apply multiple tags for easy discovery
+- **Full-Text Search:** Quickly find notes using powerful search functionality
+- **Image Support:** Attach images to notes and individual steps within procedures
+- **Version Control:** Track creation and modification timestamps with creator attribution
 
-- **Multiple Note Types**
-  - **Command Notes**: Store frequently used commands with descriptions
-  - **Procedure Notes**: Document step-by-step procedures with titles and commands for each step
-  - **Plain Notes**: Store general text-based documentation
+### 👥 User Management
+- **Authentication:** Secure login system with JWT token-based authentication
+- **Role-Based Access Control:** Admin and user roles with appropriate permissions
+- **User Administration:** Admins can create, manage, and delete users
+- **Password Management:** Users can change their own passwords securely
 
-- **Organization & Search**
-  - Full-text search across all notes
-  - Organize notes by categories
-  - Tag-based filtering and organization
-  - Filter by category or tags
+### 🛡️ Administration
+- **Settings Management:** Configure application behavior and reverse proxy URLs
+- **Backup & Restore:** Download full database backups and restore from backups
+- **Category Management:** Create, organize, and toggle note categories
+- **Tag Management:** Manage and track tag usage across notes
 
-- **Image Support**
-  - Upload images to illustrate procedures and commands
-  - Attach images to specific procedure steps or to notes directly
-  - Support for PNG, JPG, GIF, WebP, and BMP formats (max 10MB per upload)
+### 🔧 Technical Features
+- **Offline Support:** Batch scripts for offline setup and deployment
+- **Database:** SQLite with full-text search capabilities
+- **Automatic Backups:** Daily backup service running in background
+- **Responsive Design:** Web-based UI that works on desktop and mobile
+- **Reverse Proxy Ready:** Support for reverse proxy deployments
 
-- **User Management**
-  - Role-based access control (Admin, User)
-  - User authentication and password management
-  - Admin panel for user management
-  - Change password functionality
+## Technology Stack
 
-- **Data Management**
-  - Automatic daily database backups
-  - Manual backup and restore functionality
-  - SQLite database with full-text search capability
+| Category | Technology |
+|----------|-----------|
+| **Backend** | Python 3 with Flask |
+| **Frontend** | HTML, CSS, JavaScript |
+| **Database** | SQLite with FTS (Full-Text Search) |
+| **Authentication** | JWT (PyJWT) |
+| **Server** | Waitress (WSGI) |
+| **Security** | Werkzeug password hashing |
+| **Configuration** | Python-dotenv |
 
-- **Settings**
-  - Admin-configurable application settings
-  - Flexible configuration management
+## Installation
 
-## 📋 Requirements
+### Windows (Batch Scripts)
 
-- Python 3.7+
-- Flask 3.1.0
-- SQLite3
-- Modern web browser for frontend
+The repository includes convenient batch scripts for Windows setup:
 
-## 📦 Installation
+1. **Download requirements** (optional, for offline setup):
+   ```bash
+   1_download_requirements.bat
+   ```
 
-### Option 1: Quick Start (Windows)
+2. **Setup for offline environment**:
+   ```bash
+   2_setup_offline.bat
+   ```
 
-Run the included batch scripts in order:
+3. **Run the application**:
+   ```bash
+   3_run_app.bat
+   ```
 
-```bash
-1_download_requirements.bat  # Download Python dependencies
-2_setup_offline.bat          # Set up the database and initial admin user
-3_run_app.bat                # Start the application
+Or use the convenience scripts:
+- `install.bat` - Install dependencies
+- `start_server.bat` - Start the server
+
+### Manual Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/aloysiuspattath/sysnotes.git
+   cd sysnotes
+   ```
+
+2. **Create a virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the application**:
+   ```bash
+   python app.py
+   ```
+
+   Or for production:
+   ```bash
+   python run_prod.py
+   ```
+
+5. **Access the application**:
+   Open your browser and navigate to `http://localhost:5005`
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root for custom configuration:
+
+```env
+SECRET_KEY=your-secret-key-here
+TESTING=false
 ```
 
-### Option 2: Manual Installation
+### Default Settings
 
-1. **Clone the repository:**
-```bash
-git clone https://github.com/aloysiuspattath/sysnotes.git
-cd sysnotes
-```
+The application uses SQLite database (`sysadmin_notes.db`) stored in the application directory. Default settings are configured in the database initialization.
 
-2. **Create a virtual environment (recommended):**
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. **Install dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-4. **Initialize the database:**
-```bash
-python -c "from database import init_db; init_db()"
-```
-
-5. **Create admin user (if needed):**
-```bash
-python database.py
-```
-
-6. **Run the application:**
-```bash
-python app.py
-# Or for production:
-python run_prod.py
-```
-
-The application will be available at `http://localhost:5005`
-
-## 🚀 Usage
-
-### Creating a Note
-
-1. Navigate to the application home page
-2. Click "New Note" and select the note type:
-   - **Command**: A single command with description
-   - **Procedure**: Multiple steps with optional commands and descriptions
-   - **Plain**: Text-based documentation
-
-3. Fill in the required fields:
-   - Title (required)
-   - Command/Content (required based on note type)
-   - Category (optional)
-   - Tags (optional)
-   - Images (optional)
-
-4. Click "Save Note"
-
-### Searching & Filtering
-
-- Use the search bar to search across note titles, commands, and descriptions
-- Filter by category or tags using the sidebar filters
-- Click on a category or tag to see all related notes
-
-### Managing Procedures
-
-For procedure notes, you can:
-- Add multiple steps in order
-- Assign a command and description to each step
-- Upload and attach images to specific steps
-- Reorder steps as needed
-
-### Backup & Restore
-
-**As Admin:**
-- Click "Settings" → "Backup" to download a database backup
-- Click "Settings" → "Restore" to upload a previously backed-up database
-
-## 🔐 User Management
-
-### Admin Panel
-
-Admins can:
-- Create new user accounts with usernames and passwords
-- Assign user roles (Admin or User)
-- Delete user accounts
-- Configure application settings
-- Manage categories and tags
-
-### User Roles
-
-- **Admin**: Full access to all features, user management, settings, and admin panel
-- **User**: Can create, edit, and delete their own notes; view all shared notes
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 sysnotes/
-├── app.py                    # Main Flask application
-├── database.py              # Database initialization and utilities
-├── auth.py                  # Authentication and authorization
-├── backup_service.py        # Automated backup service
-├── requirements.txt         # Python dependencies
-├── templates/               # HTML templates and SPA frontend
-├── static/                  # Static assets (CSS, JS, images)
-├── uploads/                 # User-uploaded images
-├── conftest.py             # pytest configuration
-├── test_auth.py            # Authentication tests
-├── test_categories.py       # Category tests
-├── test_notes.py           # Note functionality tests
-└── .gitignore              # Git ignore rules
+├── app.py                      # Main Flask application
+├── auth.py                     # Authentication and JWT handling
+├── database.py                 # Database initialization and utilities
+├── backup_service.py          # Automatic backup service
+├── requirements.txt           # Python dependencies
+├── templates/                 # HTML templates
+│   ├── index.html            # Main SPA
+│   └── note_detail.html      # Note detail page
+├── static/                   # Frontend assets (CSS, JS, images)
+├── tests/                    # Test suite
+│   ├── conftest.py          # Pytest configuration
+│   ├── test_auth.py         # Authentication tests
+│   ├── test_notes.py        # Note CRUD tests
+│   └── test_categories.py   # Category management tests
+├── Windows batch scripts:
+│   ├── 1_download_requirements.bat
+│   ├── 2_setup_offline.bat
+│   ├── 3_run_app.bat
+│   ├── install.bat
+│   └── start_server.bat
+└── README.md
 ```
 
-## 🧪 Testing
+## API Endpoints
+
+### Authentication
+- `POST /api/login` - Login with username and password
+
+### Users (Admin Only)
+- `GET /api/users` - List all users
+- `POST /api/users` - Create new user
+- `DELETE /api/users/<user_id>` - Delete user
+
+### Account
+- `POST /api/change-password` - Change current user's password
+
+### Settings (Admin Only)
+- `GET /api/settings` - Get application settings
+- `POST /api/settings` - Update settings
+
+### Categories (Admin Only)
+- `GET /api/categories` - List categories with note counts
+- `POST /api/categories` - Create new category
+- `DELETE /api/categories/<cat_id>` - Delete category
+- `PUT /api/categories/<cat_id>/toggle` - Toggle category enabled state
+
+### Tags
+- `GET /api/tags` - List all tags with usage counts
+
+### Notes
+- `GET /api/notes` - List notes (with search, category, and tag filters)
+- `GET /api/notes/<note_id>` - Get single note with all details
+- `POST /api/notes` - Create new note
+- `PUT /api/notes/<note_id>` - Update note
+- `DELETE /api/notes/<note_id>` - Delete note
+
+### Images
+- `POST /api/notes/<note_id>/images` - Upload image to note
+- `DELETE /api/images/<image_id>` - Delete image
+
+### Backup & Restore
+- `GET /api/backup` - Download database backup
+- `POST /api/restore` - Restore from backup file
+
+### Statistics
+- `GET /api/stats` - Get statistics (total notes, categories, tags)
+
+## Usage Examples
+
+### Creating a Command Note
+
+```bash
+curl -X POST http://localhost:5005/api/notes \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "List Docker Containers",
+    "note_type": "command",
+    "command": "docker ps -a",
+    "description": "Show all Docker containers",
+    "category_id": 1,
+    "tags": ["docker", "containers"]
+  }'
+```
+
+### Creating a Procedure Note
+
+```bash
+curl -X POST http://localhost:5005/api/notes \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Deploy Application",
+    "note_type": "procedure",
+    "steps": [
+      {
+        "title": "Build Docker Image",
+        "command": "docker build -t myapp .",
+        "description": "Build the application image"
+      },
+      {
+        "title": "Push to Registry",
+        "command": "docker push myapp:latest",
+        "description": "Push to container registry"
+      }
+    ],
+    "tags": ["deployment", "docker"]
+  }'
+```
+
+## Testing
 
 Run the test suite using pytest:
 
 ```bash
 pytest
-# Run with verbose output:
-pytest -v
-# Run specific test file:
-pytest test_notes.py
 ```
 
-The test suite covers:
+Run specific test file:
+```bash
+pytest test_notes.py -v
+```
+
+Test coverage includes:
 - Authentication and authorization
+- Note CRUD operations
 - Category management
-- Note creation, updates, and deletion
 - Tag management
-- Image upload and handling
 
-## 🛠️ Configuration
+## Development
 
-### Environment Variables
+### Running in Debug Mode
 
-Create a `.env` file in the project root to customize settings:
-
-```env
-SECRET_KEY=your-secret-key-here
-TESTING=False
+```bash
+python app.py
 ```
 
-**Important**: Change the `SECRET_KEY` in production! Default value is only for development.
+The application runs with debug mode enabled by default in development.
 
-### Database
+### Database Schema
 
-The application uses SQLite with the following main tables:
-- `users`: User accounts and authentication
-- `notes`: Note records
-- `note_steps`: Steps for procedure-type notes
-- `categories`: Note categories
-- `tags`: Note tags
-- `note_tags`: Tag-to-note relationships
-- `note_images`: Uploaded images
-- `settings`: Application configuration
+The application automatically initializes the database with the following tables:
+- `users` - User accounts with password hashes
+- `notes` - Main notes table
+- `categories` - Note categories
+- `tags` - Tags for note organization
+- `note_tags` - Many-to-many relationship between notes and tags
+- `note_steps` - Procedure steps for procedure-type notes
+- `note_images` - Images attached to notes
+- `note_images_fts` - Full-text search index
+- `settings` - Application configuration
 
-## 📝 API Endpoints
+## Security
 
-### Authentication
-- `POST /api/login` - User login
+- **Password Security:** Uses Werkzeug's secure password hashing
+- **JWT Authentication:** Token-based authentication for API endpoints
+- **File Upload Validation:** Only allows specific image formats (PNG, JPG, JPEG, GIF, WebP, BMP)
+- **SQL Injection Protection:** Parameterized queries throughout the codebase
+- **Role-Based Access Control:** Admin-only endpoints protected with decorators
+- **File Size Limits:** 10MB maximum upload size
 
-### Notes
-- `GET /api/notes` - List all notes (with search/filter)
-- `POST /api/notes` - Create new note (login required)
-- `GET /api/notes/<id>` - Get single note details
-- `PUT /api/notes/<id>` - Update note (login required)
-- `DELETE /api/notes/<id>` - Delete note (login required)
+## Backup & Restore
 
-### Images
-- `POST /api/notes/<id>/images` - Upload image to note (login required)
-- `DELETE /api/images/<id>` - Delete image (login required)
+### Automatic Backups
+The application runs a daily backup service that automatically backs up the database.
 
-### Categories
-- `GET /api/categories` - List all categories
-- `POST /api/categories` - Create category (admin required)
-- `DELETE /api/categories/<id>` - Delete category (admin required)
-- `PUT /api/categories/<id>/toggle` - Enable/disable category (admin required)
+### Manual Backup
+Download a database backup through the admin interface or API:
 
-### Tags
-- `GET /api/tags` - List all tags
+```bash
+curl -X GET "http://localhost:5005/api/backup?token=YOUR_TOKEN" \
+  --output backup.db
+```
 
-### Users (Admin Only)
-- `GET /api/users` - List all users
-- `POST /api/users` - Create new user
-- `DELETE /api/users/<id>` - Delete user
+### Restore from Backup
+Upload a backup file through the admin interface or use the API:
 
-### Admin
-- `GET /api/settings` - Get application settings
-- `POST /api/settings` - Update settings (admin required)
-- `GET /api/backup` - Download database backup (admin required)
-- `POST /api/restore` - Restore database from backup (admin required)
+```bash
+curl -X POST http://localhost:5005/api/restore \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@backup.db"
+```
 
-### Stats
-- `GET /api/stats` - Get statistics (total notes, categories, tags)
+## Reverse Proxy Configuration
 
-## 🔄 Automatic Backups
+To use SysNotes behind a reverse proxy, configure the `reverse_proxy_url` setting:
 
-SysNotes includes an automatic backup service that:
-- Runs daily in the background
-- Creates timestamped backups
-- Stores backups alongside the main database
-- Can be disabled by setting the `TESTING` environment variable
+```bash
+curl -X POST http://localhost:5005/api/settings \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reverse_proxy_url": "/notes"
+  }'
+```
 
-## 🐛 Troubleshooting
+The application will then serve all routes under `/notes/`.
 
-### Port 5005 already in use
-Edit `app.py` or `run_prod.py` and change the port number:
+## Troubleshooting
+
+### Port Already in Use
+If port 5005 is already in use, modify the port in `app.py`:
+
 ```python
-app.run(host='0.0.0.0', port=YOUR_PORT)
+app.run(host='0.0.0.0', port=8080, debug=True)
 ```
 
-### Database locked error
-This usually means the app is running and accessing the database. Ensure only one instance is running.
+### Database Issues
+Delete the `sysadmin_notes.db` file to reset the database (all data will be lost):
 
-### Images not uploading
-- Check that the `uploads/` directory exists and is writable
-- Verify file size is under 10MB
-- Ensure file format is supported (PNG, JPG, GIF, WebP, BMP)
+```bash
+rm sysadmin_notes.db
+python app.py  # Will reinitialize the database
+```
 
-## 📄 License
+### Import Errors
+Ensure all dependencies are installed:
 
-This project is open source and available under the MIT License.
+```bash
+pip install -r requirements.txt
+```
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Contributions are welcome! Feel free to:
+- Report bugs and issues
+- Suggest new features
+- Submit pull requests
+- Improve documentation
 
-## 👤 Author
+## License
 
-Created by Aloysius Pattath
+This project is created by [@aloysiuspattath](https://github.com/aloysiuspattath). Check the repository for any license information.
 
-## 📞 Support
+## Support
 
-For issues, questions, or feature requests, please open an issue in the repository.
+For issues, questions, or suggestions, please open an issue on the [GitHub repository](https://github.com/aloysiuspattath/sysnotes).
 
 ---
 
-**Happy note-taking! 📝**
+**Last Updated:** June 2026
