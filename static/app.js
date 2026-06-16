@@ -1,5 +1,7 @@
 /* ═══════════════════════════════════════════════════════
    SysNotes — Application Logic v3 (Steps + Images)
+   Author: aloysiuspattath
+   GitHub: https://github.com/aloysiuspattath
    ═══════════════════════════════════════════════════════ */
 
 (function () {

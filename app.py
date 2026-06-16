@@ -1,3 +1,8 @@
+"""
+SysNotes - Backend
+Author: aloysiuspattath
+GitHub: https://github.com/aloysiuspattath
+"""
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
