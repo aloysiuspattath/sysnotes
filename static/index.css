@@ -2024,7 +2024,7 @@ body {
 /* ═══════════════════════════════════════════════════════
    MODAL XL
    ═══════════════════════════════════════════════════════ */
-.modal-xl { max-width: 780px; width: 95vw; }
+.modal-xl { max-width: 1000px; width: 95vw; }
 
 .note-type-toggle { display:flex; gap:4px; padding:4px; background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:20px; transition:background var(--transition-slow),border-color var(--transition-slow); }
 .note-type-btn { flex:1; display:flex; align-items:center; justify-content:center; gap:7px; padding:10px 16px; border:none; background:transparent; color:var(--text-secondary); font-size:0.85rem; font-weight:500; font-family:var(--font-sans); border-radius:var(--radius-md); cursor:pointer; transition:all var(--transition-fast); }
