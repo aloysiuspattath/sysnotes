@@ -642,7 +642,7 @@
                     </div>
                 </div>`;
             } else if (note.note_type === 'plain') {
-                let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : (note.description || '');
+                let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : escapeHTML(note.description || '');
                 const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Plain Note</span>`;
                 html += `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
                     <div style="width:100%;">

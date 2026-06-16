@@ -10,13 +10,26 @@ import re
 import uuid
 from datetime import datetime
 from dotenv import load_dotenv
+import secrets
 
 # Load environment variables from .env if present
 load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-# Use environment variable for secret key, with a development fallback
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'sysadmin-super-secret-key-change-this-in-production-2024')
+
+def get_secret_key():
+    secret_file = os.path.join(os.path.dirname(__file__), '.secret_key')
+    if os.environ.get('SECRET_KEY'):
+        return os.environ.get('SECRET_KEY')
+    if os.path.exists(secret_file):
+        with open(secret_file, 'r') as f:
+            return f.read().strip()
+    new_key = secrets.token_hex(32)
+    with open(secret_file, 'w') as f:
+        f.write(new_key)
+    return new_key
+
+app.config['SECRET_KEY'] = get_secret_key()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max upload
 
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}

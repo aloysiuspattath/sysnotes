@@ -562,7 +562,7 @@
             let descHtml = '';
             if (note.description) {
                 if (isPlain) {
-                    let sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description) : note.description;
+                    let sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description) : esc(note.description);
                     descHtml = `<div class="note-description markdown-body" style="color:var(--text); white-space: normal;">${sanitized}</div>`;
                 } else {
                     descHtml = `<p class="note-description">${esc(note.description)}</p>`;
