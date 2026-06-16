@@ -1058,6 +1058,7 @@ body {
     line-height: 1.55;
     margin-bottom: 6px;
     transition: color var(--transition-slow);
+    white-space: pre-wrap;
 }
 
 /* ─── Meta row (category + hidden tags/author) ───────── */

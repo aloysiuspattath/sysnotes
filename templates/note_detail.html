@@ -6,6 +6,7 @@
     <title>SysNotes — Loading…</title>
     <base href="{{ base_url }}">
     <meta name="description" content="Sysadmin note detail view">
+    <script src="static/vendor/purify.min.js"></script>
     <style>
         /* ── Reset & tokens ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -212,6 +213,7 @@
             color: var(--text-2);
             line-height: 1.65;
             margin-bottom: 18px;
+            white-space: pre-wrap;
         }
 
         .note-meta-row {
@@ -370,6 +372,7 @@
             font-size: 0.88rem;
             color: var(--text-2);
             line-height: 1.65;
+            white-space: pre-wrap;
         }
 
         .step-command {
@@ -538,6 +541,7 @@
         // ── Render ───────────────────────────────────────
         function renderNote(note) {
             const isProcedure = note.note_type === 'procedure';
+            const isPlain = note.note_type === 'plain';
             const steps = note.steps || [];
             const tags = note.tags || [];
             const images = note.images || [];
@@ -545,15 +549,30 @@
             document.title = `SysNotes — ${note.title}`;
 
             let html = '';
+            
+            let badgeType = 'command';
+            let badgeText = 'Command';
+            if (isProcedure) { badgeType = 'procedure'; badgeText = 'Procedure'; }
+            if (isPlain) { badgeType = 'procedure'; badgeText = 'Plain Note'; }
+
+            let descHtml = '';
+            if (note.description) {
+                if (isPlain) {
+                    let sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description) : note.description;
+                    descHtml = `<div class="note-description markdown-body" style="color:var(--text); white-space: normal;">${sanitized}</div>`;
+                } else {
+                    descHtml = `<p class="note-description">${esc(note.description)}</p>`;
+                }
+            }
 
             // Header card
             html += `<div class="note-header-card ${isProcedure ? 'is-procedure' : ''}">
-                <div class="note-type-badge ${isProcedure ? 'procedure' : 'command'}">
+                <div class="note-type-badge ${badgeType}">
                     <span class="dot"></span>
-                    ${isProcedure ? 'Procedure' : 'Command'}
+                    ${badgeText}
                 </div>
                 <h1 class="note-title">${esc(note.title)}</h1>
-                ${note.description ? `<p class="note-description">${esc(note.description)}</p>` : ''}
+                ${descHtml}
                 <div class="note-meta-row">
                     ${note.category_name ? `<span class="meta-badge category">📁 ${esc(note.category_name)}</span>` : ''}
                     ${tags.map(t => `<span class="meta-badge tag">#${esc(t)}</span>`).join('')}
