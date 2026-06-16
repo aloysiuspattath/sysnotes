@@ -1118,6 +1118,7 @@
         const quillOptions = {
             theme: 'snow',
             modules: {
+                imageResize: { displaySize: true },
                 toolbar: [
                     [{ 'header': [1, 2, 3, false] }],
                     ['bold', 'italic', 'underline', 'strike'],

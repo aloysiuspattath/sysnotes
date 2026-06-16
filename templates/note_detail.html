@@ -150,7 +150,7 @@
 
         /* ── Main layout ─────────────────────────────────── */
         .page {
-            max-width: 860px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 36px 24px 80px;
         }
@@ -418,15 +418,17 @@
             gap: 10px;
         }
         .step-image-thumb {
-            width: 100px; height: 100px;
+            height: 180px; width: auto; max-width: 100%;
             border-radius: var(--r);
             overflow: hidden;
             border: 1px solid var(--border);
             cursor: zoom-in;
             transition: transform 0.15s, box-shadow 0.15s;
+            background: var(--surface);
+            display: flex; align-items: center; justify-content: center;
         }
-        .step-image-thumb:hover { transform: scale(1.05); box-shadow: var(--shadow-lg); }
-        .step-image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .step-image-thumb:hover { transform: scale(1.02); box-shadow: var(--shadow-lg); }
+        .step-image-thumb img { width: auto; max-width: 100%; height: 100%; object-fit: contain; }
 
         /* ── Lightbox ────────────────────────────────────── */
         .lightbox {
@@ -451,15 +453,17 @@
         .note-images-section { margin-top: 24px; }
         .note-images-grid { display: flex; flex-wrap: wrap; gap: 10px; }
         .note-image-thumb {
-            width: 100px; height: 100px;
+            height: 180px; width: auto; max-width: 100%;
             border-radius: var(--r);
             overflow: hidden;
             border: 1px solid var(--border);
             cursor: zoom-in;
             transition: transform 0.15s;
+            background: var(--surface);
+            display: flex; align-items: center; justify-content: center;
         }
-        .note-image-thumb:hover { transform: scale(1.05); }
-        .note-image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .note-image-thumb:hover { transform: scale(1.02); }
+        .note-image-thumb img { width: auto; max-width: 100%; height: 100%; object-fit: contain; }
 
         /* ── Responsive ──────────────────────────────────── */
         @media (max-width: 600px) {
