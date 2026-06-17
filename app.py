@@ -85,6 +85,17 @@ def serve_index():
 # Serve uploaded images
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    mimetype = None
+    if ext == 'pdf':
+        mimetype = 'application/pdf'
+    elif ext == 'txt':
+        mimetype = 'text/plain'
+    elif ext == 'csv':
+        mimetype = 'text/csv'
+    
+    if mimetype:
+        return send_from_directory(UPLOADS_DIR, filename, mimetype=mimetype)
     return send_from_directory(UPLOADS_DIR, filename)
 
 # Note detail page
