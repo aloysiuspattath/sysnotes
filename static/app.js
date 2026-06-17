@@ -444,13 +444,22 @@
     // ─── IMAGE LIGHTBOX ──────────────────────────────────
     function openLightbox(src) {
         if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
-            window.open(src, '_blank');
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = src;
+            document.body.appendChild(iframe);
+            setTimeout(() => iframe.remove(), 2000);
             return;
         }
         const overlay = document.createElement('div');
         overlay.className = 'img-lightbox-overlay';
         if (/\.pdf(\?.*)?$/i.test(src)) {
-            overlay.innerHTML = `<iframe src="${escapeHTML(src)}" width="80%" height="80%" style="border:none; background:white; border-radius:8px;"></iframe>`;
+            overlay.innerHTML = `<object data="${escapeHTML(src)}" type="application/pdf" width="80%" height="80%" style="border:none; background:white; border-radius:8px; display:flex; align-items:center; justify-content:center; text-align:center;">
+                <div style="padding: 40px;">
+                    <p style="color:#333; margin-bottom:10px;">Your browser is configured to download PDFs rather than displaying them.</p>
+                    <a href="${escapeHTML(src)}" download style="color:var(--primary); text-decoration:underline;">Click here to download</a>
+                </div>
+            </object>`;
             const closeBtn = document.createElement('button');
             closeBtn.innerHTML = '×';
             closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2);';

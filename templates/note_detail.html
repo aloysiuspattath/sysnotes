@@ -568,14 +568,33 @@
         }
 
         function openLightbox(src) {
-            if (/\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
-                window.open(src, '_blank');
+            if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = src;
+                document.body.appendChild(iframe);
+                setTimeout(() => iframe.remove(), 2000);
                 return;
             }
             const box = document.createElement('div');
             box.className = 'lightbox';
-            box.innerHTML = `<img src="${esc(src)}" alt="">`;
-            box.addEventListener('click', () => box.remove());
+            if (/\.pdf(\?.*)?$/i.test(src)) {
+                box.innerHTML = `<object data="${esc(src)}" type="application/pdf" width="80%" height="85vh" style="border:none; background:white; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; text-align:center;">
+                    <div style="padding: 40px;">
+                        <p style="color:#333; margin-bottom:10px;">Your browser is configured to download PDFs rather than displaying them.</p>
+                        <a href="${esc(src)}" download style="color:var(--primary); text-decoration:underline;">Click here to download</a>
+                    </div>
+                </object>`;
+                // Add a small close button specifically for PDF
+                const closeBtn = document.createElement('button');
+                closeBtn.innerHTML = '×';
+                closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2);';
+                closeBtn.onclick = () => box.remove();
+                box.appendChild(closeBtn);
+            } else {
+                box.innerHTML = `<img src="${esc(src)}" alt="">`;
+                box.addEventListener('click', () => box.remove());
+            }
             document.body.appendChild(box);
             document.addEventListener('keydown', function escFn(e) {
                 if (e.key === 'Escape') { box.remove(); document.removeEventListener('keydown', escFn); }
