@@ -547,7 +547,7 @@
         }
 
         function isDocumentUrl(url) {
-            return /\.(pdf|doc|docx)(\?.*)?$/i.test(url);
+            return /\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(url);
         }
 
         function getDocumentThumb(url, name) {
@@ -555,11 +555,20 @@
             if (/\.(doc|docx)(\?.*)?$/i.test(url) || /\.(doc|docx)$/i.test(name)) {
                 icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-4 1.5 4M15 15l-1.5-4-1.5 4"></path></svg>';
             }
+            if (/\.(xlsx)(\?.*)?$/i.test(url) || /\.(xlsx)$/i.test(name)) {
+                icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13l3 4 3-4M11 13v4"></path></svg>';
+            }
+            if (/\.(csv)(\?.*)?$/i.test(url) || /\.(csv)$/i.test(name)) {
+                icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 15h8M8 11h8"></path></svg>';
+            }
+            if (/\.(txt)(\?.*)?$/i.test(url) || /\.(txt)$/i.test(name)) {
+                icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+            }
             return `<div class="doc-thumb" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-tertiary); color:var(--text); padding:10px; text-align:center; word-break:break-all;"><div style="margin-bottom:8px;">${icon}</div><span style="font-size:10px; line-height:1.2;">${esc(name||'Document')}</span></div>`;
         }
 
         function openLightbox(src) {
-            if (/\.(doc|docx)(\?.*)?$/i.test(src)) {
+            if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
                 window.open(src, '_blank');
                 return;
             }
@@ -582,6 +591,7 @@
         function renderNote(note) {
             const isProcedure = note.note_type === 'procedure';
             const isPlain = note.note_type === 'plain';
+            const isDocument = note.note_type === 'document';
             const steps = note.steps || [];
             const tags = note.tags || [];
             const images = note.images || [];
@@ -594,6 +604,7 @@
             let badgeText = 'Command';
             if (isProcedure) { badgeType = 'procedure'; badgeText = 'Procedure'; }
             if (isPlain) { badgeType = 'procedure'; badgeText = 'Plain Note'; }
+            if (isDocument) { badgeType = 'procedure'; badgeText = 'DOCS / SOP'; }
 
             let descHtml = '';
             if (note.description) {
@@ -620,7 +631,7 @@
                 </div>
             </div>`;
 
-            if (!isProcedure && note.command) {
+            if (!isProcedure && !isDocument && note.command) {
                 // Single command block
                 html += `<div class="command-block">
                     <div class="command-block-label">

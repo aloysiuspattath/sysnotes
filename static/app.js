@@ -21,15 +21,21 @@
         close: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
         file_pdf: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
         file_word: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-4 1.5 4M15 15l-1.5-4-1.5 4"></path></svg>',
+        file_excel: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13l3 4 3-4M11 13v4"></path></svg>',
+        file_csv: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 15h8M8 11h8"></path></svg>',
+        file_text: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
     };
 
     function isDocumentUrl(url) {
-        return /\.(pdf|doc|docx)(\?.*)?$/i.test(url);
+        return /\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(url);
     }
     
     function getDocumentThumb(url, name) {
         let icon = ICONS.file_pdf;
         if (/\.(doc|docx)(\?.*)?$/i.test(url) || /\.(doc|docx)$/i.test(name)) icon = ICONS.file_word;
+        if (/\.(xlsx)(\?.*)?$/i.test(url) || /\.(xlsx)$/i.test(name)) icon = ICONS.file_excel;
+        if (/\.(csv)(\?.*)?$/i.test(url) || /\.(csv)$/i.test(name)) icon = ICONS.file_csv;
+        if (/\.(txt)(\?.*)?$/i.test(url) || /\.(txt)$/i.test(name)) icon = ICONS.file_text;
         return `<div class="doc-thumb" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-tertiary); color:var(--text); padding:10px; text-align:center; word-break:break-all;"><div style="margin-bottom:8px;">${icon}</div><span style="font-size:10px; line-height:1.2;">${escapeHTML(name||'Document')}</span></div>`;
     }
 
@@ -229,8 +235,9 @@
         const commandSection = document.getElementById(`${prefix}-command-section`);
         const stepsSection = document.getElementById(`${prefix}-steps-section`);
         const plainSection = document.getElementById(`${prefix}-plain-section`);
+        const documentSection = document.getElementById(`${prefix}-document-section`);
         typeHidden.value = type;
-        document.querySelectorAll(`#${prefix}-type-command, #${prefix}-type-procedure, #${prefix}-type-plain`).forEach(b => {
+        document.querySelectorAll(`#${prefix}-type-command, #${prefix}-type-procedure, #${prefix}-type-plain, #${prefix}-type-document`).forEach(b => {
             b.classList.toggle('active', b.dataset.type === type);
         });
         if (commandSection) commandSection.style.display = type === 'command' ? '' : 'none';
@@ -241,6 +248,7 @@
             }
         }
         if (plainSection) plainSection.style.display = type === 'plain' ? '' : 'none';
+        if (documentSection) documentSection.style.display = type === 'document' ? '' : 'none';
         
         if (type === 'plain') {
             setTimeout(() => {
@@ -333,9 +341,10 @@
     function handleStepImageSelect(fileInput, sid, prefix) {
         const previewRow = document.querySelector(`.step-img-previews[data-sid="${sid}"]`);
         Array.from(fileInput.files).forEach(file => {
-            const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx'];
+            const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx','txt','csv','xlsx'];
             const ext = file.name.split('.').pop().toLowerCase();
             if (!allowedExt.includes(ext)) { showToast('Invalid file format', true); return; }
+                if (file.size > 10 * 1024 * 1024) { showToast('File exceeds 10MB limit', true); return; }
             const url = URL.createObjectURL(file);
             const thumb = document.createElement('div');
             thumb.className = 'image-preview-thumb';
@@ -353,18 +362,20 @@
     }
 
     // ─── IMAGE HANDLING (note-level for command type) ────
-    function initNoteImageUpload(prefix) {
-        const area = document.getElementById(`${prefix}-note-image-area`);
-        const fileInput = area.querySelector('.note-image-file-input');
-        const previewRow = document.getElementById(`${prefix}-note-image-previews`);
+    function initNoteUploadArea(areaId, fileInputSelector, previewRowId) {
+        const area = document.getElementById(areaId);
+        if (!area) return;
+        const fileInput = area.querySelector(fileInputSelector);
+        const previewRow = document.getElementById(previewRowId);
 
         area.addEventListener('click', () => fileInput.click());
 
         fileInput.addEventListener('change', () => {
             Array.from(fileInput.files).forEach(file => {
-                const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx'];
+                const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx','txt','csv','xlsx'];
                 const ext = file.name.split('.').pop().toLowerCase();
                 if (!allowedExt.includes(ext)) { showToast('Invalid file format', true); return; }
+                if (file.size > 10 * 1024 * 1024) { showToast('File exceeds 10MB limit', true); return; }
                 const url = URL.createObjectURL(file);
                 const thumb = document.createElement('div');
                 thumb.className = 'image-preview-thumb';
@@ -381,6 +392,12 @@
             fileInput.value = '';
         });
     }
+    function initNoteImageUpload(prefix) {
+        initNoteUploadArea(`${prefix}-note-image-area`, '.note-image-file-input', `${prefix}-note-image-previews`);
+        initNoteUploadArea(`${prefix}-note-document-area`, '.note-image-file-input', `${prefix}-note-document-previews`);
+    }
+
+    
 
     function addServerImagePreview(previewRow, img, sid, prefix) {
         const thumb = document.createElement('div');
@@ -665,6 +682,33 @@
                         </div>
                     </div>
                 </div>`;
+            } else if (note.note_type === 'document') {
+                const noteImgsHtml = (note.images || []).map(img => {
+                    if (isDocumentUrl(img.url)) {
+                        return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; width:80px; height:80px;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
+                    }
+                    return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
+                }).join('');
+
+                html += `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
+                    <div style="width:100%;">
+                        <div class="note-header">
+                            <div>
+                                <span class="note-type-badge type-procedure" style="background-color: var(--secondary);">${ICONS.file_pdf} DOCS / SOP</span>
+                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                            </div>
+                            ${actions}
+                        </div>
+                        ${note.description ? `<p class="note-description" style="margin-top:10px;">${escapeHTML(note.description)}</p>` : ''}
+                        ${noteImgsHtml ? `<div class="note-inline-images" style="margin-top:10px;">${noteImgsHtml}</div>` : ''}
+                        
+                        <div class="note-meta">
+                            ${categoryBadge}
+                            ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
+                            ${metaHtml}
+                        </div>
+                    </div>
+                </div>`;
             } else if (note.note_type === 'plain') {
                 let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : escapeHTML(note.description || '');
                 const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Plain Note</span>`;
@@ -817,6 +861,8 @@
         document.getElementById('add-note-form').reset();
         document.getElementById('add-steps-list').innerHTML = '';
         document.getElementById('add-note-image-previews').innerHTML = '';
+        document.getElementById('add-note-document-previews').innerHTML = '';
+        if (document.getElementById('add-note-document-desc')) document.getElementById('add-note-document-desc').value = '';
         setNoteType('add', 'command');
     }
 
@@ -836,6 +882,9 @@
             description = quillAdd ? quillAdd.root.innerHTML : '';
             if (!description.trim()) { showToast('Note content is required', true); return; }
         }
+        if (noteType === 'document') {
+            description = document.getElementById('add-note-document-desc').value.trim();
+        }
 
         const body = {
             title, note_type: noteType,
@@ -846,15 +895,21 @@
         if (noteType === 'command') body.command = command;
         if (noteType === 'procedure') body.steps = steps;
 
-        const res = await apiFetch('api/notes', {
+        let res = await apiFetch('api/notes', {
             method: 'POST',
             headers: authHeaders(),
             body: JSON.stringify(body)
         });
 
         if (res && res.ok) {
+            const data = await res.json();
+            if (noteType === 'command') {
+                await uploadPendingImages(data.id, document.getElementById('add-note-image-previews'));
+            } else if (noteType === 'document') {
+                await uploadPendingImages(data.id, document.getElementById('add-note-document-previews'));
+            }
             closeModal('add-note-modal');
-            showToast('Command added successfully');
+            showToast('Note added successfully');
             fetchNotes();
             fetchCategories();
         } else {
@@ -883,6 +938,9 @@
         document.getElementById('edit-note-title').value = note.title;
         document.getElementById('edit-note-command').value = note.command || '';
         document.getElementById('edit-note-description').value = note.description || '';
+        if (document.getElementById('edit-note-document-desc')) {
+            document.getElementById('edit-note-document-desc').value = note.note_type === 'document' ? (note.description || '') : '';
+        }
         
         if (quillEdit) {
             quillEdit.root.innerHTML = note.note_type === 'plain' ? (note.description || '') : '';
@@ -925,6 +983,9 @@
         if (noteType === 'plain') {
             description = quillEdit ? quillEdit.root.innerHTML : '';
             if (!description.trim()) { showToast('Note content is required', true); return; }
+        }
+        if (noteType === 'document') {
+            description = document.getElementById('edit-note-document-desc').value.trim();
         }
 
         const body = {

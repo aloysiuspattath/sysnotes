@@ -37,7 +37,7 @@ def get_secret_key():
 app.config['SECRET_KEY'] = get_secret_key()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max upload
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -678,7 +678,7 @@ def upload_image(note_id):
             return jsonify({'message': 'No file selected'}), 400
 
         if not allowed_file(file.filename):
-            return jsonify({'message': 'Invalid file format. Allowed: Images, PDF, Word Docs'}), 400
+            return jsonify({'message': 'Invalid file format. Allowed: Images, PDF, Word, Excel, CSV, TXT'}), 400
 
         original_name = secure_filename(file.filename)
         ext = original_name.rsplit('.', 1)[1].lower()
