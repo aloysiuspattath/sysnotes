@@ -494,7 +494,8 @@
                     }
                 } catch (e) {
                     console.error('PDF JS Error:', e);
-                    innerContainer.innerHTML = `<div style="color:#333; text-align:center; margin-top:50px; font-family:sans-serif;"><p>Failed to load PDF viewer.</p><a href="${escapeHTML(src)}" download style="color:#0066cc; text-decoration:underline;">Click here to download the PDF instead</a></div>`;
+                    const errMsg = e ? (e.message || e.toString()) : 'Unknown error';
+                    innerContainer.innerHTML = `<div style="color:#333; text-align:center; margin-top:50px; font-family:sans-serif;"><p>Failed to load PDF viewer: <strong>${escapeHTML(errMsg)}</strong></p><a href="${escapeHTML(src)}" download style="color:#0066cc; text-decoration:underline;">Click here to download the PDF instead</a></div>`;
                 }
             })();
         } else {
