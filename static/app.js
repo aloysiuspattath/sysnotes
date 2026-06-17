@@ -271,10 +271,10 @@
                 <textarea class="step-desc-input" placeholder="Description / notes for this step (optional)" rows="2">${escapeHTML(stepData?.description || '')}</textarea>
                 <div class="step-image-row">
                     <button type="button" class="step-upload-btn" data-sid="${sid}">
-                        ${ICONS.image} Add Image
+                        ${ICONS.image} Add File
                     </button>
                     <div class="image-preview-row step-img-previews" data-sid="${sid}"></div>
-                    <input type="file" class="step-file-input" data-sid="${sid}" accept="image/*" multiple style="display:none;">
+                    <input type="file" class="step-file-input" data-sid="${sid}" accept="image/*,.pdf,.doc,.docx" multiple style="display:none;">
                 </div>
             </div>`;
 
