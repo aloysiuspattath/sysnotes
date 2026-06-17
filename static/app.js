@@ -1242,6 +1242,7 @@
         }
         const quillOptions = {
             theme: 'snow',
+            bounds: document.body,
             modules: {
                 imageResize: { displaySize: true },
                 toolbar: [
@@ -1347,7 +1348,14 @@
         // Modal close
         document.querySelectorAll('.modal-close-btn').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.modal)));
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
+            overlay.addEventListener('click', (e) => { 
+                if (e.target === overlay) {
+                    if (overlay.id === 'addNoteModal' || overlay.id === 'editNoteModal') {
+                        return; // Prevent closing when clicking outside for these modals
+                    }
+                    overlay.style.display = 'none'; 
+                }
+            });
         });
 
         // Sidebar mobile
