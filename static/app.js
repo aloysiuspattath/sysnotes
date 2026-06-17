@@ -222,7 +222,7 @@
         const commandSection = document.getElementById(`${prefix}-command-section`);
         const stepsSection = document.getElementById(`${prefix}-steps-section`);
 
-        document.querySelectorAll(`#${prefix}-type-command, #${prefix}-type-procedure, #${prefix}-type-plain`).forEach(btn => {
+        document.querySelectorAll(`#${prefix}-type-command, #${prefix}-type-procedure, #${prefix}-type-plain, #${prefix}-type-document`).forEach(btn => {
             btn.addEventListener('click', () => {
                 const type = btn.dataset.type;
                 setNoteType(prefix, type);
