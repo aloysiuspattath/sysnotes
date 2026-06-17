@@ -568,19 +568,14 @@
         }
 
         function openLightbox(src) {
-            if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
+            if (/\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
                 window.open(src, '_blank');
                 return;
             }
             const box = document.createElement('div');
             box.className = 'lightbox';
-            if (/\.pdf(\?.*)?$/i.test(src)) {
-                box.innerHTML = `<iframe src="${esc(src)}" style="width:80%; height:85vh; border:none; background:white; border-radius:var(--radius-md);"></iframe>`;
-                box.addEventListener('click', (e) => { if(e.target === box) box.remove(); });
-            } else {
-                box.innerHTML = `<img src="${esc(src)}" alt="">`;
-                box.addEventListener('click', () => box.remove());
-            }
+            box.innerHTML = `<img src="${esc(src)}" alt="">`;
+            box.addEventListener('click', () => box.remove());
             document.body.appendChild(box);
             document.addEventListener('keydown', function escFn(e) {
                 if (e.key === 'Escape') { box.remove(); document.removeEventListener('keydown', escFn); }
