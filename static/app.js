@@ -454,10 +454,10 @@
         const overlay = document.createElement('div');
         overlay.className = 'img-lightbox-overlay';
         if (/\.pdf(\?.*)?$/i.test(src)) {
-            overlay.innerHTML = `<iframe src="${escapeHTML(src)}" style="width:80%; height:85vh; border:none; background:white; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></iframe>`;
+            overlay.innerHTML = `<embed src="${escapeHTML(src)}" type="application/pdf" style="position:absolute; top:5%; left:10%; width:80%; height:90%; border:none; background:white; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.6);" />`;
             const closeBtn = document.createElement('button');
             closeBtn.innerHTML = '×';
-            closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2);';
+            closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
             closeBtn.onclick = () => overlay.remove();
             overlay.appendChild(closeBtn);
         } else {
