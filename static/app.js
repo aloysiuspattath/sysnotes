@@ -1350,7 +1350,7 @@
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', (e) => { 
                 if (e.target === overlay) {
-                    if (overlay.id === 'addNoteModal' || overlay.id === 'editNoteModal') {
+                    if (overlay.id === 'add-note-modal' || overlay.id === 'edit-note-modal') {
                         return; // Prevent closing when clicking outside for these modals
                     }
                     overlay.style.display = 'none'; 
