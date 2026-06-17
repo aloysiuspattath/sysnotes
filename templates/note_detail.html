@@ -651,6 +651,28 @@
                 </div>`;
             }
 
+            if (isDocument && note.command) {
+                html += `<div class="note-images-section">
+                    <div class="steps-title" style="margin-bottom:10px;">External Link / Network Path</div>
+                    <div class="note-doc-preview" style="background-color: var(--bg-tertiary); padding: 15px; border:1px solid var(--border); border-radius: var(--radius-md); display:flex; align-items:center; gap:15px;">
+                        <div class="note-doc-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        </div>
+                        <div class="note-doc-details" style="flex:1; word-break:break-all;">
+                            <p class="note-doc-name" style="margin:0; font-weight:600; font-size:15px; color:var(--text);">${esc(note.command)}</p>
+                        </div>
+                    </div>
+                    <div class="note-actions" style="margin-top: 15px; display:flex; gap:10px;">
+                        <a href="${note.command.startsWith('http') ? esc(note.command) : 'file:///' + esc(note.command).replace(/\\\\/g, '/')}" target="_blank" class="btn btn-outline">
+                            Open Link
+                        </a>
+                        <button type="button" class="btn btn-outline" onclick="copyText('${esc(note.command).replace(/\\\\/g, '\\\\\\\\')}', this)">
+                            Copy Path
+                        </button>
+                    </div>
+                </div>`;
+            }
+
             // Note-level images
             if (images.length) {
                 html += `<div class="note-images-section">

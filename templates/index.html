@@ -640,8 +640,14 @@
                         <label for="add-note-document-desc" class="form-label">Description <span class="form-hint">(optional)</span></label>
                         <textarea id="add-note-document-desc" class="form-input form-textarea" placeholder="Summary of this document or SOP…" rows="3"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Document Upload</label>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label class="form-label">Document Source</label>
+                        <div class="note-type-toggle" style="margin-bottom: 0;">
+                            <button type="button" class="note-type-btn active" id="add-doc-source-file" onclick="toggleDocSource('add', 'file')">Upload File</button>
+                            <button type="button" class="note-type-btn" id="add-doc-source-link" onclick="toggleDocSource('add', 'link')">External Link</button>
+                        </div>
+                    </div>
+                    <div class="form-group" id="add-doc-upload-container">
                         <div class="image-upload-area" id="add-note-document-area" style="padding:40px 20px;">
                             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                             <span>Click to upload document</span>
@@ -649,6 +655,10 @@
                         </div>
                         <p style="margin-top:5px; font-size:12px; color:var(--text-muted);">Max 10MB | Allowed: Images, PDF, Word, Excel, CSV, TXT</p>
                         <div class="image-preview-row" id="add-note-document-previews"></div>
+                    </div>
+                    <div class="form-group" id="add-doc-link-container" style="display:none;">
+                        <label for="add-note-document-link" class="form-label">External Link or Network Path</label>
+                        <input type="text" id="add-note-document-link" class="form-input" placeholder="e.g. \\snapdrive\share\doc.pdf or https://...">
                     </div>
                 </div>
 
@@ -768,8 +778,14 @@
                         <label for="edit-note-document-desc" class="form-label">Description <span class="form-hint">(optional)</span></label>
                         <textarea id="edit-note-document-desc" class="form-input form-textarea" placeholder="Summary of this document or SOP…" rows="3"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Document Upload</label>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label class="form-label">Document Source</label>
+                        <div class="note-type-toggle" style="margin-bottom: 0;">
+                            <button type="button" class="note-type-btn active" id="edit-doc-source-file" onclick="toggleDocSource('edit', 'file')">Upload File</button>
+                            <button type="button" class="note-type-btn" id="edit-doc-source-link" onclick="toggleDocSource('edit', 'link')">External Link</button>
+                        </div>
+                    </div>
+                    <div class="form-group" id="edit-doc-upload-container">
                         <div class="image-upload-area" id="edit-note-document-area" style="padding:40px 20px;">
                             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                             <span>Click to upload document</span>
@@ -777,6 +793,10 @@
                         </div>
                         <p style="margin-top:5px; font-size:12px; color:var(--text-muted);">Max 10MB | Allowed: Images, PDF, Word, Excel, CSV, TXT</p>
                         <div class="image-preview-row" id="edit-note-document-previews"></div>
+                    </div>
+                    <div class="form-group" id="edit-doc-link-container" style="display:none;">
+                        <label for="edit-note-document-link" class="form-label">External Link or Network Path</label>
+                        <input type="text" id="edit-note-document-link" class="form-input" placeholder="e.g. \\snapdrive\share\doc.pdf or https://...">
                     </div>
                 </div>
 

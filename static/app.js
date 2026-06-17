@@ -911,6 +911,17 @@
         };
         if (noteType === 'command') body.command = command;
         if (noteType === 'procedure') body.steps = steps;
+        if (noteType === 'document') {
+            const sourceLinkBtn = document.getElementById('add-doc-source-link');
+            if (sourceLinkBtn && sourceLinkBtn.classList.contains('active')) {
+                const linkVal = document.getElementById('add-note-document-link').value.trim();
+                if (!linkVal) { showToast('External Link is required', true); return; }
+                body.command = linkVal;
+            } else {
+                const thumbs = document.getElementById('add-note-document-previews').querySelectorAll('.image-preview-thumb');
+                if (thumbs.length === 0) { showToast('Please upload a document', true); return; }
+            }
+        }
 
         let res = await apiFetch('api/notes', {
             method: 'POST',
@@ -968,6 +979,7 @@
         // Reset steps list
         document.getElementById('edit-steps-list').innerHTML = '';
         document.getElementById('edit-note-image-previews').innerHTML = '';
+        document.getElementById('edit-note-document-previews').innerHTML = '';
 
         // Set note type and populate steps
         setNoteType('edit', note.note_type || 'command');
@@ -977,8 +989,18 @@
 
         // Show existing note-level images for edit
         if (note.images && note.images.length) {
-            const previewRow = document.getElementById('edit-note-image-previews');
+            const previewRow = note.note_type === 'document' ? document.getElementById('edit-note-document-previews') : document.getElementById('edit-note-image-previews');
             note.images.forEach(img => addServerImagePreview(previewRow, img, null, 'edit'));
+        }
+
+        if (note.note_type === 'document') {
+            if (note.command && (!note.images || note.images.length === 0)) {
+                document.getElementById('edit-note-document-link').value = note.command;
+                if (window.toggleDocSource) window.toggleDocSource('edit', 'link');
+            } else {
+                document.getElementById('edit-note-document-link').value = '';
+                if (window.toggleDocSource) window.toggleDocSource('edit', 'file');
+            }
         }
 
         openModal('edit-note-modal');
@@ -1011,6 +1033,17 @@
             description, tags,
             steps: steps.map(s => ({ title: s.title, command: s.command, description: s.description }))
         };
+
+        if (noteType === 'document') {
+            const sourceLinkBtn = document.getElementById('edit-doc-source-link');
+            if (sourceLinkBtn && sourceLinkBtn.classList.contains('active')) {
+                const linkVal = document.getElementById('edit-note-document-link').value.trim();
+                if (!linkVal) { showToast('External Link is required', true); return; }
+                body.command = linkVal;
+            }
+            // we don't block saving if no file is uploaded for edit, because they might just be editing the description of an existing doc.
+        }
+
         if (categoryId) body.category_id = parseInt(categoryId);
 
         const res = await apiFetch('api/notes/' + noteId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
@@ -1232,6 +1265,28 @@
         const tag = el.tagName.toLowerCase();
         return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
     }
+
+    window.toggleDocSource = function(prefix, type) {
+        if (type === 'file') {
+            const btnF = document.getElementById(prefix + '-doc-source-file');
+            if(btnF) btnF.classList.add('active');
+            const btnL = document.getElementById(prefix + '-doc-source-link');
+            if(btnL) btnL.classList.remove('active');
+            const cU = document.getElementById(prefix + '-doc-upload-container');
+            if(cU) cU.style.display = 'block';
+            const cL = document.getElementById(prefix + '-doc-link-container');
+            if(cL) cL.style.display = 'none';
+        } else {
+            const btnL = document.getElementById(prefix + '-doc-source-link');
+            if(btnL) btnL.classList.add('active');
+            const btnF = document.getElementById(prefix + '-doc-source-file');
+            if(btnF) btnF.classList.remove('active');
+            const cU = document.getElementById(prefix + '-doc-upload-container');
+            if(cU) cU.style.display = 'none';
+            const cL = document.getElementById(prefix + '-doc-link-container');
+            if(cL) cL.style.display = 'block';
+        }
+    };
 
     // ═══════════════════════════════════════════════════════
     //  INIT & EVENT LISTENERS
