@@ -443,10 +443,23 @@
 
     // ─── IMAGE LIGHTBOX ──────────────────────────────────
     function openLightbox(src) {
+        if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
+            window.open(src, '_blank');
+            return;
+        }
         const overlay = document.createElement('div');
         overlay.className = 'img-lightbox-overlay';
-        overlay.innerHTML = `<img src="${escapeHTML(src)}" alt="Image preview">`;
-        overlay.addEventListener('click', () => overlay.remove());
+        if (/\.pdf(\?.*)?$/i.test(src)) {
+            overlay.innerHTML = `<iframe src="${escapeHTML(src)}" width="80%" height="80%" style="border:none; background:white; border-radius:8px;"></iframe>`;
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2);';
+            closeBtn.onclick = () => overlay.remove();
+            overlay.appendChild(closeBtn);
+        } else {
+            overlay.innerHTML = `<img src="${escapeHTML(src)}" alt="Image preview">`;
+            overlay.addEventListener('click', () => overlay.remove());
+        }
         document.body.appendChild(overlay);
     }
 
