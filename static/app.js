@@ -19,7 +19,19 @@
         image: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
         steps: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>',
         close: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+        file_pdf: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
+        file_word: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-4 1.5 4M15 15l-1.5-4-1.5 4"></path></svg>',
     };
+
+    function isDocumentUrl(url) {
+        return /\.(pdf|doc|docx)(\?.*)?$/i.test(url);
+    }
+    
+    function getDocumentThumb(url, name) {
+        let icon = ICONS.file_pdf;
+        if (/\.(doc|docx)(\?.*)?$/i.test(url) || /\.(doc|docx)$/i.test(name)) icon = ICONS.file_word;
+        return `<div class="doc-thumb" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-tertiary); color:var(--text); padding:10px; text-align:center; word-break:break-all;"><div style="margin-bottom:8px;">${icon}</div><span style="font-size:10px; line-height:1.2;">${escapeHTML(name||'Document')}</span></div>`;
+    }
 
     // ─── STATE ──────────────────────────────────────────
     let currentToken = localStorage.getItem('sn_token') || null;
@@ -321,13 +333,17 @@
     function handleStepImageSelect(fileInput, sid, prefix) {
         const previewRow = document.querySelector(`.step-img-previews[data-sid="${sid}"]`);
         Array.from(fileInput.files).forEach(file => {
-            if (!file.type.startsWith('image/')) return;
+            const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!allowedExt.includes(ext)) { showToast('Invalid file format', true); return; }
             const url = URL.createObjectURL(file);
             const thumb = document.createElement('div');
             thumb.className = 'image-preview-thumb';
             thumb._file = file;
             thumb._sid = sid;
-            thumb.innerHTML = `<img src="${url}" alt=""><button type="button" class="img-remove-btn">${ICONS.close}</button>`;
+            const isDoc = isDocumentUrl(file.name);
+            const inner = isDoc ? getDocumentThumb(file.name, file.name) : `<img src="${url}" alt="">`;
+            thumb.innerHTML = `${inner}<button type="button" class="img-remove-btn">${ICONS.close}</button>`;
             thumb.querySelector('.img-remove-btn').addEventListener('click', () => {
                 URL.revokeObjectURL(url);
                 thumb.remove();
@@ -346,12 +362,16 @@
 
         fileInput.addEventListener('change', () => {
             Array.from(fileInput.files).forEach(file => {
-                if (!file.type.startsWith('image/')) return;
+                const allowedExt = ['png','jpg','jpeg','gif','webp','bmp','pdf','doc','docx'];
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (!allowedExt.includes(ext)) { showToast('Invalid file format', true); return; }
                 const url = URL.createObjectURL(file);
                 const thumb = document.createElement('div');
                 thumb.className = 'image-preview-thumb';
                 thumb._file = file;
-                thumb.innerHTML = `<img src="${url}" alt=""><button type="button" class="img-remove-btn">${ICONS.close}</button>`;
+                const isDoc = isDocumentUrl(file.name);
+                const inner = isDoc ? getDocumentThumb(file.name, file.name) : `<img src="${url}" alt="">`;
+                thumb.innerHTML = `${inner}<button type="button" class="img-remove-btn">${ICONS.close}</button>`;
                 thumb.querySelector('.img-remove-btn').addEventListener('click', () => {
                     URL.revokeObjectURL(url);
                     thumb.remove();
@@ -366,7 +386,9 @@
         const thumb = document.createElement('div');
         thumb.className = 'image-preview-thumb';
         thumb._serverId = img.id;
-        thumb.innerHTML = `<img src="${img.url}" alt="${escapeHTML(img.name || '')}"><button type="button" class="img-remove-btn">${ICONS.close}</button>`;
+        const isDoc = isDocumentUrl(img.url);
+        const inner = isDoc ? getDocumentThumb(img.url, img.name) : `<img src="${img.url}" alt="${escapeHTML(img.name || '')}">`;
+        thumb.innerHTML = `${inner}<button type="button" class="img-remove-btn">${ICONS.close}</button>`;
         thumb.querySelector('.img-remove-btn').addEventListener('click', async () => {
             // Delete from server immediately
             const res = await apiFetch(`api/images/${img.id}`, {
@@ -666,9 +688,12 @@
                 </div>`;
             } else {
                 // Quick command note
-                const noteImgsHtml = (note.images || []).map(img =>
-                    `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`
-                ).join('');
+                const noteImgsHtml = (note.images || []).map(img => {
+                    if (isDocumentUrl(img.url)) {
+                        return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
+                    }
+                    return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
+                }).join('');
 
                 html += `<div class="note-item" style="animation-delay:${delay}s" data-note-id="${note.id}">
                     <div class="note-info">
@@ -713,7 +738,13 @@
 
         // Image lightbox
         container.querySelectorAll('.procedure-step-image, .note-inline-image').forEach(el => {
-            el.addEventListener('click', () => openLightbox(el.dataset.src));
+            el.addEventListener('click', () => {
+                if (isDocumentUrl(el.dataset.src)) {
+                    window.open(el.dataset.src, '_blank');
+                } else {
+                    openLightbox(el.dataset.src);
+                }
+            });
         });
     }
 
