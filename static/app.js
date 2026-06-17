@@ -454,12 +454,49 @@
         const overlay = document.createElement('div');
         overlay.className = 'img-lightbox-overlay';
         if (/\.pdf(\?.*)?$/i.test(src)) {
-            overlay.innerHTML = `<embed src="${escapeHTML(src)}" type="application/pdf" style="position:absolute; top:5%; left:10%; width:80%; height:90%; border:none; background:white; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.6);" />`;
+            const innerContainer = document.createElement('div');
+            innerContainer.style.cssText = 'width:80%; height:85vh; background:#e0e0e0; border-radius:8px; overflow-y:auto; padding:20px; box-sizing:border-box; position:relative;';
+            innerContainer.innerHTML = '<div style="color:#333; text-align:center; margin-top:50px; font-family:sans-serif;">Loading PDF...</div>';
+            overlay.appendChild(innerContainer);
+
             const closeBtn = document.createElement('button');
             closeBtn.innerHTML = '×';
             closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
             closeBtn.onclick = () => overlay.remove();
             overlay.appendChild(closeBtn);
+
+            (async function() {
+                try {
+                    if (!window.pdfjsLib) {
+                        await new Promise((resolve, reject) => {
+                            const script = document.createElement('script');
+                            script.src = 'static/vendor/pdfjs/pdf.min.js';
+                            script.onload = resolve;
+                            script.onerror = reject;
+                            document.head.appendChild(script);
+                        });
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'static/vendor/pdfjs/pdf.worker.min.js';
+                    }
+                    const loadingTask = window.pdfjsLib.getDocument(src);
+                    const pdf = await loadingTask.promise;
+                    innerContainer.innerHTML = '';
+                    
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        const viewport = page.getViewport({scale: 1.5});
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        canvas.style.cssText = 'display:block; margin:0 auto 20px auto; max-width:100%; height:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2); background:white;';
+                        innerContainer.appendChild(canvas);
+                        await page.render({canvasContext: context, viewport: viewport}).promise;
+                    }
+                } catch (e) {
+                    console.error('PDF JS Error:', e);
+                    innerContainer.innerHTML = `<div style="color:#333; text-align:center; margin-top:50px; font-family:sans-serif;"><p>Failed to load PDF viewer.</p><a href="${escapeHTML(src)}" download style="color:#0066cc; text-decoration:underline;">Click here to download the PDF instead</a></div>`;
+                }
+            })();
         } else {
             overlay.innerHTML = `<img src="${escapeHTML(src)}" alt="Image preview">`;
             overlay.addEventListener('click', () => overlay.remove());
