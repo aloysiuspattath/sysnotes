@@ -520,15 +520,30 @@
 
         function copyText(text, btn) {
             const orig = btn.innerHTML;
-            navigator.clipboard.writeText(text).catch(() => {
-                const ta = document.createElement('textarea');
-                ta.value = text; ta.style.opacity = '0'; ta.style.position = 'fixed';
-                document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-                document.body.removeChild(ta);
-            });
-            btn.innerHTML = '✓';
-            btn.classList.add('copied');
-            setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+            
+            const success = () => {
+                btn.innerHTML = '✓';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
+            };
+
+            const fallbackCopy = () => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text; ta.style.opacity = '0'; ta.style.position = 'fixed';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    success();
+                } catch (err) {
+                    console.error('Fallback copy failed', err);
+                }
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(success).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
         }
 
         function openLightbox(src) {

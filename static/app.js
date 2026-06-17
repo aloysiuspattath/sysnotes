@@ -721,20 +721,34 @@
     
     function copyToClipboard(text, btnEl) {
         const origIcon = btnEl.innerHTML;
-        navigator.clipboard.writeText(text).then(() => {
+        
+        const success = () => {
             btnEl.innerHTML = ICONS.check;
             btnEl.classList.add('copied');
             setTimeout(() => { btnEl.innerHTML = origIcon; btnEl.classList.remove('copied'); }, 2000);
-        }).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed'; ta.style.opacity = '0';
-            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-            document.body.removeChild(ta);
-            btnEl.innerHTML = ICONS.check;
-            btnEl.classList.add('copied');
-            setTimeout(() => { btnEl.innerHTML = origIcon; btnEl.classList.remove('copied'); }, 2000);
-        });
+        };
+
+        const fallbackCopy = () => {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed'; 
+                ta.style.opacity = '0';
+                document.body.appendChild(ta); 
+                ta.select(); 
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                success();
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(success).catch(fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
     }
 
     async function handleLogin(e) {
