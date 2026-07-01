@@ -67,7 +67,9 @@ The repository includes convenient batch scripts for Windows setup:
 
 Or use the convenience scripts:
 - `install.bat` - Install dependencies
-- `start_server.bat` - Start the server
+- `start_server.bat` - Start the server in the foreground
+- `run_background.vbs` - Start the production server silently in the background
+- `stop_server.bat` - Safely stop the background server running on port 5005
 
 ### Linux / macOS (Shell Scripts)
 
