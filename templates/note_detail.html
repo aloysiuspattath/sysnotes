@@ -306,6 +306,38 @@
             word-break: break-all;
         }
 
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: var(--r);
+            font-size: 0.83rem;
+            font-weight: 600;
+            font-family: var(--font);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+            text-decoration: none;
+        }
+        .btn-outline {
+            border-color: var(--border);
+            background: transparent;
+            color: var(--text-2);
+        }
+        .btn-outline:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-s);
+        }
+        .btn-xs {
+            padding: 2px 6px;
+            font-size: 10px;
+            border-radius: 4px;
+        }
+
         /* ── Procedure steps ─────────────────────────────── */
         .steps-title {
             font-size: 0.8rem;
@@ -527,6 +559,20 @@
             return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
+        function autolink(text) {
+            if (!text) return '';
+            const escaped = esc(text);
+            const urlPattern = /((?:https?|ftp):\/\/[^\s<]+)/g;
+            let result = escaped.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+            
+            const uncPattern = /(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
+            result = result.replace(uncPattern, function(match) {
+                const cleanPath = match.replace(/\\/g, '/');
+                return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-outline btn-xs copy-path-btn" data-path="${esc(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
+            });
+            return result;
+        }
+
         function copyText(text, btn) {
             const orig = btn.innerHTML;
             
@@ -641,7 +687,7 @@
                     let sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description) : esc(note.description);
                     descHtml = `<div class="note-description markdown-body" style="color:var(--text); white-space: normal;">${sanitized}</div>`;
                 } else {
-                    descHtml = `<p class="note-description">${esc(note.description)}</p>`;
+                    descHtml = `<p class="note-description">${autolink(note.description)}</p>`;
                 }
             }
 
@@ -722,7 +768,7 @@
                             <div class="step-title">${esc(step.title || 'Step ' + (i + 1))}</div>
                         </div>
                         <div class="step-body">
-                            ${step.description ? `<p class="step-desc">${esc(step.description)}</p>` : ''}
+                            ${step.description ? `<p class="step-desc">${autolink(step.description)}</p>` : ''}
                             ${step.command ? `
                                 <div class="step-command">
                                     <div class="step-command-header">
@@ -762,6 +808,15 @@
                 btn.addEventListener('click', () => {
                     const code = btn.closest('.step-command').querySelector('code').textContent;
                     copyText(code, btn);
+                });
+            });
+
+            // Wire copy-path buttons for UNC links
+            container.querySelectorAll('.copy-path-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    copyText(btn.dataset.path, btn);
                 });
             });
 

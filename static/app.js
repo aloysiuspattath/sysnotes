@@ -84,6 +84,20 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    function autolink(text) {
+        if (!text) return '';
+        const escaped = escapeHTML(text);
+        const urlPattern = /((?:https?|ftp):\/\/[^\s<]+)/g;
+        let result = escaped.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+        
+        const uncPattern = /(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
+        result = result.replace(uncPattern, function(match) {
+            const cleanPath = match.replace(/\\/g, '/');
+            return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-secondary btn-xs copy-path-btn" data-path="${escapeHTML(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
+        });
+        return result;
+    }
+
     function debounce(fn, ms) {
         let timer;
         return function (...args) {
@@ -695,7 +709,7 @@
                             </div>
                             ${actions}
                         </div>
-                        ${note.description ? `<p class="note-description">${escapeHTML(note.description)}</p>` : ''}
+                        ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
                         
                         <div class="procedure-card-summary">
                             <div class="step-preview-stack">${stepsPreviewHtml}</div>
@@ -727,7 +741,7 @@
                             </div>
                             ${actions}
                         </div>
-                        ${note.description ? `<p class="note-description" style="margin-top:10px;">${escapeHTML(note.description)}</p>` : ''}
+                        ${note.description ? `<p class="note-description" style="margin-top:10px;">${autolink(note.description)}</p>` : ''}
                         ${noteImgsHtml ? `<div class="note-inline-images" style="margin-top:10px;">${noteImgsHtml}</div>` : ''}
                         
                         <div class="note-meta">
@@ -776,7 +790,7 @@
                             </div>
                             ${actions}
                         </div>
-                        ${note.description ? `<p class="note-description">${escapeHTML(note.description)}</p>` : ''}
+                        ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
                         <div class="note-meta">
                             ${categoryBadge}
                             ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
@@ -801,6 +815,15 @@
             btn.addEventListener('click', () => {
                 const code = btn.closest('.note-code-block').querySelector('code').textContent;
                 copyToClipboard(code, btn);
+            });
+        });
+
+        // Attach copy-path buttons for UNC links
+        container.querySelectorAll('.copy-path-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                copyToClipboard(btn.dataset.path, btn);
             });
         });
 
