@@ -216,6 +216,15 @@
             white-space: pre-wrap;
         }
 
+        .markdown-body a {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+        .markdown-body a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
         .note-meta-row {
             display: flex;
             align-items: center;
@@ -593,6 +602,17 @@
             document.body.appendChild(box);
             document.addEventListener('keydown', function escFn(e) {
                 if (e.key === 'Escape') { box.remove(); document.removeEventListener('keydown', escFn); }
+            });
+        }
+
+        // ── DOMPurify Configuration ─────────────────────────
+        if (typeof DOMPurify !== 'undefined') {
+            DOMPurify.setConfig({ ADD_ATTR: ['target', 'rel'] });
+            DOMPurify.addHook('afterSanitizeAttributes', function (node) {
+                if (node.tagName === 'A') {
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer');
+                }
             });
         }
 
