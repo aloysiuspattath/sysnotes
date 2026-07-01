@@ -14,19 +14,37 @@ if __name__ == "__main__":
         port = int(os.getenv('PORT', '5005'))
     except ValueError:
         port = 5005
+    # Configure dual logging to console and file
+    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_file_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'sysnotes.log')
     
-    # Configure simple logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # File handler
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    file_handler.setFormatter(log_formatter)
+    file_handler.setLevel(logging.INFO)
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(log_formatter)
+    console_handler.setLevel(logging.INFO)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
     logger = logging.getLogger('waitress')
-    logger.setLevel(logging.INFO)
     
-    print(f"===================================================")
-    print(f"  Starting SysNotes Production Server")
-    print(f"  Listening on: http://{host}:{port}")
-    print(f"===================================================")
+    logger.info("===================================================")
+    logger.info("  Starting SysNotes Production Server")
+    logger.info(f"  Listening on: http://{host}:{port}")
+    logger.info("===================================================")
     
     try:
         serve(app, host=host, port=port, threads=4)
     except Exception as e:
-        print(f"Failed to start server: {e}")
+        logger.error(f"Failed to start server: {e}")
         sys.exit(1)

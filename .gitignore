@@ -29,3 +29,6 @@ move_ui.py
 
 # Python virtual environment
 venv/
+
+# Server runtime logs
+*.log
