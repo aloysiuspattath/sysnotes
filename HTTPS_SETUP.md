@@ -2,9 +2,19 @@
 
 Since **Waitress** (the WSGI server used by SysNotes) does not support SSL/TLS natively, the industry-standard way to secure SysNotes with HTTPS is to run it behind a **Reverse Proxy** (like IIS on Windows or Nginx on Linux).
 
-The proxy handles the SSL handshake and certificates, then forwards traffic to Waitress running locally on `http://127.0.0.1:5005`.
+## Setting up HTTPS on port 5005 (`https://ip:5005`)
 
-SysNotes is pre-configured with `ProxyFix` middleware to safely detect and trust the `X-Forwarded-Proto` (HTTPS) headers sent by the proxy.
+To run HTTPS on the exact same port (`5005`), you must:
+1. Move the Python/Waitress backend to a different internal port (e.g. `5006`).
+2. Run the Reverse Proxy on port `5005` with SSL enabled, forwarding traffic to the backend on `5006`.
+
+### Step 1: Move Waitress to Port 5006
+Open the `.env` file in the project root and append:
+```env
+PORT=5006
+HOST=127.0.0.1
+```
+This forces Waitress to bind only to local traffic on port `5006`, leaving port `5005` free for your reverse proxy.
 
 ---
 
@@ -27,7 +37,7 @@ To host SysNotes with HTTPS on Windows Server using **Internet Information Servi
 
 2. **Add Website Bindings:**
    * Right-click **Sites** -> **Add Website**.
-   * Name it `SysNotes`, bind it to **HTTPS** (port `443`), and select your SSL certificate.
+   * Name it `SysNotes`, bind it to **HTTPS** on port **`5005`**, and select your SSL certificate.
    * Point the Physical Path to a dummy/empty folder (IIS needs a path, but URL Rewrite will redirect all requests).
 
 3. **Configure URL Rewrite:**
@@ -40,7 +50,7 @@ To host SysNotes with HTTPS on Windows Server using **Internet Information Servi
      * Pattern: `(.*)`
    * **Action:**
      * Action Type: `Rewrite`
-     * Rewrite URL: `http://127.0.0.1:5005/{R:1}`
+     * Rewrite URL: `http://127.0.0.1:5006/{R:1}` *(proxying to the new Waitress port)*
    * Click **Apply**.
 
 4. **Forward Protocol Headers:**
@@ -71,7 +81,8 @@ To host SysNotes with HTTPS on Linux using **Nginx**:
    }
 
    server {
-       listen 443 ssl http2;
+       # Bind HTTPS to port 5005
+       listen 5005 ssl http2;
        server_name notes.example.com;
 
        ssl_certificate /etc/ssl/certs/sysnotes.crt;
@@ -84,14 +95,15 @@ To host SysNotes with HTTPS on Linux using **Nginx**:
        client_max_body_size 10M;
 
        location / {
-           proxy_pass http://127.0.0.1:5005;
+           # Proxy to Waitress running on port 5006
+           proxy_pass http://127.0.0.1:5006;
            
            # Forward essential headers
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
            proxy_set_header X-Forwarded-Proto $scheme;
-           proxy_set_header X-Forwarded-Port 443;
+           proxy_set_header X-Forwarded-Port 5005;
        }
    }
    ```

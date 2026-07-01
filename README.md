@@ -361,14 +361,20 @@ curl -X POST http://localhost:5005/api/restore \
   -F "file=@backup.db"
 ```
 
-## Reverse Proxy & SSL/HTTPS Configuration
+## Reverse Proxy Configuration
 
-To use SysNotes behind a reverse proxy (like IIS or Nginx) and secure it with SSL/HTTPS:
+To use SysNotes behind a reverse proxy, configure the `reverse_proxy_url` setting:
 
-1. Configure the `reverse_proxy_url` setting in the Admin Settings panel (e.g. `https://notes.example.com` or `https://domain.com/notes`).
-2. Follow the detailed step-by-step setup guides in [HTTPS_SETUP.md](file:///d:/new projects/notes commands and queries/HTTPS_SETUP.md) to configure IIS (Windows) or Nginx (Linux) to manage SSL certificates and forward traffic properly.
+```bash
+curl -X POST http://localhost:5005/api/settings \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reverse_proxy_url": "/notes"
+  }'
+```
 
-The application includes built-in `ProxyFix` middleware to trust headers like `X-Forwarded-Proto` and correctly serve resources over HTTPS.
+The application will then serve all routes under `/notes/`.
 
 ## Troubleshooting
 

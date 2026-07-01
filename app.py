@@ -77,9 +77,6 @@ class ProxyDispatcherMiddleware:
 
 app.wsgi_app = ProxyDispatcherMiddleware(app.wsgi_app)
 
-from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
-
 # Serve Frontend SPA
 @app.route('/')
 def serve_index():
