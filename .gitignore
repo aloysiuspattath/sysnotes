@@ -7,6 +7,7 @@ uploads/
 
 # Environment files
 .env
+.secret_key
 
 # Python cache
 __pycache__/

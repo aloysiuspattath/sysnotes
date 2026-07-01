@@ -773,9 +773,37 @@ def restore_db():
     if file.filename == '':
         return jsonify({'message': 'No selected file'}), 400
     if file and file.filename.endswith('.db'):
-        file.save(DATABASE_PATH)
-        return jsonify({'message': 'Database restored successfully'})
+        temp_path = DATABASE_PATH + '.tmp'
+        file.save(temp_path)
+        try:
+            # Verify SQLite integrity and format
+            temp_conn = sqlite3.connect(temp_path)
+            cursor = temp_conn.cursor()
+            cursor.execute("PRAGMA integrity_check")
+            check_result = cursor.fetchone()
+            temp_conn.close()
+            
+            if not check_result or check_result[0] != 'ok':
+                raise ValueError("Database integrity check failed")
+                
+            # Safely replace active database
+            if os.path.exists(DATABASE_PATH):
+                os.remove(DATABASE_PATH)
+            os.rename(temp_path, DATABASE_PATH)
+            return jsonify({'message': 'Database restored successfully'})
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return jsonify({'message': f'Invalid database file or integrity check failed: {e}'}), 400
     return jsonify({'message': 'Invalid file type. Must be a .db file'}), 400
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005, debug=True)
