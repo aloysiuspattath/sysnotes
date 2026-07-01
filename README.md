@@ -71,6 +71,25 @@ Or use the convenience scripts:
 - `run_background.vbs` - Start the production server silently in the background
 - `stop_server.bat` - Safely stop the background server running on port 5005
 
+### Windows Production Hosting (NSSM)
+
+To run SysNotes as a persistent background service on Windows (which survives user sessions logging off and starts automatically on boot):
+
+1. Download **NSSM (Non-Sucking Service Manager)** and copy `nssm.exe` to your offline server.
+2. Open a Command Prompt (cmd) as **Administrator** and run:
+   ```cmd
+   nssm install SysNotes
+   ```
+3. In the GUI dialog that pops up:
+   * **Path:** Select the path to `start_server.bat`
+   * **Startup directory:** Select the path to the project root directory
+4. Click **Install Service**.
+5. Start the service using:
+   ```cmd
+   net start SysNotes
+   ```
+   Or manage it directly from Windows Services manager (`services.msc`).
+
 ### Linux / macOS (Shell Scripts)
 
 The repository includes convenient shell scripts for Linux/macOS setup:
