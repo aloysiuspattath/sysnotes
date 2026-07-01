@@ -69,6 +69,43 @@ Or use the convenience scripts:
 - `install.bat` - Install dependencies
 - `start_server.bat` - Start the server
 
+### Linux / macOS (Shell Scripts)
+
+The repository includes convenient shell scripts for Linux/macOS setup:
+
+1. **Download requirements** (optional, for offline setup):
+   ```bash
+   ./download_requirements.sh
+   ```
+
+2. **Setup dependencies** (automatically supports offline/online modes):
+   ```bash
+   ./install.sh
+   ```
+
+3. **Run the production application**:
+   ```bash
+   ./start_server.sh
+   ```
+
+### Linux Production Hosting (systemd)
+
+To host SysNotes as a persistent background service on Linux:
+
+1. Copy the template service file to systemd directory:
+   ```bash
+   sudo cp sysnotes.service /etc/systemd/system/sysnotes.service
+   ```
+
+2. Open `/etc/systemd/system/sysnotes.service` and adjust `User`, `WorkingDirectory`, and `ExecStart` paths if needed.
+
+3. Start and enable the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl start sysnotes
+   sudo systemctl enable sysnotes
+   ```
+
 ### Manual Setup
 
 1. **Clone the repository**:
