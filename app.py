@@ -493,48 +493,52 @@ def get_notes():
         cursor = conn.cursor()
 
         base_select = """
-            SELECT n.id, n.title, n.command, n.description, n.note_type,
+            SELECT DISTINCT n.id, n.title, n.command, n.description, n.note_type,
                    n.category_id, c.name as category_name,
                    n.created_at, n.updated_at, n.created_by,
                    u.username as created_by_username
             FROM notes n
             LEFT JOIN categories c ON n.category_id = c.id
             LEFT JOIN users u ON n.created_by = u.id
+            LEFT JOIN note_tags nt ON nt.note_id = n.id
+            LEFT JOIN tags tg ON tg.id = nt.tag_id
+            LEFT JOIN note_steps ns ON ns.note_id = n.id
         """
 
         conditions = []
         params = []
 
         if query:
-            safe_query = _sanitize_fts_query(query)
-            if safe_query:
-                base_select = """
-                    SELECT n.id, n.title, n.command, n.description, n.note_type,
-                           n.category_id, c.name as category_name,
-                           n.created_at, n.updated_at, n.created_by,
-                           u.username as created_by_username
-                    FROM notes_fts f
-                    JOIN notes n ON f.rowid = n.id
-                    LEFT JOIN categories c ON n.category_id = c.id
-                    LEFT JOIN users u ON n.created_by = u.id
-                """
-                conditions.append("notes_fts MATCH ?")
-                params.append(safe_query)
+            terms = query.split()
+            for term in terms:
+                term_pattern = f"%{term.lower()}%"
+                conditions.append(
+                    """(
+                        LOWER(n.title) LIKE ? OR 
+                        LOWER(n.description) LIKE ? OR 
+                        LOWER(n.command) LIKE ? OR 
+                        LOWER(c.name) LIKE ? OR 
+                        LOWER(tg.name) LIKE ? OR 
+                        LOWER(ns.title) LIKE ? OR 
+                        LOWER(ns.command) LIKE ? OR 
+                        LOWER(ns.description) LIKE ?
+                    )"""
+                )
+                params.extend([term_pattern] * 8)
 
         if category:
             conditions.append("c.id = ?")
             params.append(category)
 
         if tag:
-            base_select += " JOIN note_tags nt ON nt.note_id = n.id JOIN tags t ON t.id = nt.tag_id"
-            conditions.append("t.name = ?")
+            conditions.append("tg.name = ?")
             params.append(tag)
 
         sql = base_select
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
 
-        sql += " ORDER BY rank" if query else " ORDER BY n.created_at DESC"
+        sql += " ORDER BY n.created_at DESC"
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
