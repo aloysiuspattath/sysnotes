@@ -57,15 +57,15 @@ def admin_token():
 
 @pytest.fixture
 def user_token():
-    """Generates a regular user JWT token for tests."""
+    """Generates a regular author JWT token for tests."""
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE role = 'user' AND username = 'testuser'")
+    cursor.execute("SELECT id FROM users WHERE role = 'author' AND username = 'testuser'")
     user = cursor.fetchone()
     if not user:
         from werkzeug.security import generate_password_hash
         cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                       ('testuser', generate_password_hash('testpass'), 'user'))
+                       ('testuser', generate_password_hash('testpass'), 'author'))
         conn.commit()
         user_id = cursor.lastrowid
     else:
@@ -73,7 +73,27 @@ def user_token():
     conn.close()
     
     with my_app.app.app_context():
-        return generate_token(user_id, 'testuser', 'user')
+        return generate_token(user_id, 'testuser', 'author')
+
+@pytest.fixture
+def moderator_token():
+    """Generates a moderator JWT token for tests."""
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE role = 'moderator' AND username = 'testmod'")
+    user = cursor.fetchone()
+    if not user:
+        from werkzeug.security import generate_password_hash
+        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+                       ('testmod', generate_password_hash('testpass'), 'moderator'))
+        conn.commit()
+        user_id = cursor.lastrowid
+    else:
+        user_id = user['id']
+    conn.close()
+    
+    with my_app.app.app_context():
+        return generate_token(user_id, 'testmod', 'moderator')
 
 @pytest.fixture
 def admin_client(client, admin_token):
@@ -83,6 +103,12 @@ def admin_client(client, admin_token):
 
 @pytest.fixture
 def user_client(client, user_token):
-    """Test client authenticated as regular user."""
+    """Test client authenticated as regular author."""
     client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {user_token}'
+    return client
+
+@pytest.fixture
+def moderator_client(client, moderator_token):
+    """Test client authenticated as moderator."""
+    client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {moderator_token}'
     return client

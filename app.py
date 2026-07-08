@@ -113,7 +113,7 @@ def get_note_by_id(note_id):
             "SELECT n.id, n.title, n.command, n.description, n.note_type,"
             " n.category_id, c.name as category_name,"
             " n.created_at, n.updated_at, n.created_by,"
-            " u.username as created_by_username"
+            " u.username as created_by_username, n.approved"
             " FROM notes n"
             " LEFT JOIN categories c ON n.category_id = c.id"
             " LEFT JOIN users u ON n.created_by = u.id"
@@ -124,6 +124,22 @@ def get_note_by_id(note_id):
         if not row:
             return jsonify({"message": "Note not found"}), 404
         note = dict(row)
+
+        # Check authorization if note is not approved
+        if not note.get('approved'):
+            current_user_id = None
+            current_role = None
+            token = request.headers.get('Authorization')
+            if token:
+                if token.startswith('Bearer '):
+                    token = token[7:]
+                payload = decode_token(token)
+                if not isinstance(payload, str):
+                    current_user_id = payload.get('sub')
+                    current_role = payload.get('role')
+            
+            if current_role not in ['admin', 'moderator'] and current_user_id != note['created_by']:
+                return jsonify({"message": "Access denied"}), 403
         cursor.execute(
             "SELECT t.name FROM tags t"
             " JOIN note_tags nt ON nt.tag_id = t.id"
@@ -206,7 +222,10 @@ def create_user():
         data = request.json
         username = data.get('username')
         password = data.get('password')
-        role = data.get('role', 'user')
+        role = data.get('role', 'author')
+
+        if role not in ['admin', 'moderator', 'author']:
+            return jsonify({'message': 'Invalid role. Must be admin, moderator, or author'}), 400
 
         if not username or not password:
             return jsonify({'message': 'Username and password required'}), 400
@@ -216,7 +235,7 @@ def create_user():
             cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                            (username, generate_password_hash(password), role))
             conn.commit()
-            return jsonify({'message': 'User created successfully'}), 201
+            return jsonify({'message': 'User created successfully', 'id': cursor.lastrowid}), 201
         except sqlite3.IntegrityError:
             return jsonify({'message': 'Username already exists'}), 400
     finally:
@@ -489,6 +508,7 @@ def get_notes():
         query = request.args.get('q', '').strip()
         category = request.args.get('category', '').strip()
         tag = request.args.get('tag', '').strip()
+        status = request.args.get('status', '').strip()
 
         cursor = conn.cursor()
 
@@ -496,7 +516,7 @@ def get_notes():
             SELECT DISTINCT n.id, n.title, n.command, n.description, n.note_type,
                    n.category_id, c.name as category_name,
                    n.created_at, n.updated_at, n.created_by,
-                   u.username as created_by_username
+                   u.username as created_by_username, n.approved
             FROM notes n
             LEFT JOIN categories c ON n.category_id = c.id
             LEFT JOIN users u ON n.created_by = u.id
@@ -533,6 +553,28 @@ def get_notes():
         if tag:
             conditions.append("tg.name = ?")
             params.append(tag)
+
+        # Separate approved from pending notes
+        if status == 'pending':
+            token = request.headers.get('Authorization')
+            if not token:
+                return jsonify({'message': 'Token is missing!'}), 401
+            if token.startswith('Bearer '):
+                token = token[7:]
+            payload = decode_token(token)
+            if isinstance(payload, str):
+                return jsonify({'message': 'Invalid token!'}), 401
+            
+            user_id = payload.get('sub')
+            user_role = payload.get('role', 'author')
+            
+            if user_role in ['admin', 'moderator']:
+                conditions.append("n.approved = 0")
+            else:
+                conditions.append("n.approved = 0 AND n.created_by = ?")
+                params.append(user_id)
+        else:
+            conditions.append("n.approved = 1")
 
         sql = base_select
         if conditions:
@@ -583,10 +625,13 @@ def create_note():
         if note_type == 'plain' and not description:
             return jsonify({'message': 'Content is required for plain notes'}), 400
 
+        user_role = request.user.get('role', 'author')
+        approved = 1 if user_role in ['admin', 'moderator'] else 0
+
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO notes (title, command, description, note_type, category_id, created_by) VALUES (?,?,?,?,?,?)",
-            (title, command, description, note_type, category_id, request.user['sub'])
+            "INSERT INTO notes (title, command, description, note_type, category_id, created_by, approved) VALUES (?,?,?,?,?,?,?)",
+            (title, command, description, note_type, category_id, request.user['sub'], approved)
         )
         note_id = cursor.lastrowid
 
@@ -597,7 +642,8 @@ def create_note():
             _link_tags_to_note(cursor, conn, note_id, tags)
 
         conn.commit()
-        return jsonify({'message': 'Note created', 'id': note_id}), 201
+        message = 'Note created' if approved == 1 else 'Note created and is pending approval'
+        return jsonify({'message': message, 'id': note_id, 'approved': bool(approved)}), 201
     finally:
         conn.close()
 
@@ -624,10 +670,21 @@ def update_note(note_id):
         if not note:
             return jsonify({'message': 'Note not found'}), 404
 
+        user_role = request.user.get('role', 'author')
+        is_creator = (note['created_by'] == request.user['sub'])
+        
+        if user_role not in ['admin', 'moderator'] and not is_creator:
+            return jsonify({'message': 'Access denied'}), 403
+
+        # Force re-approval if an author edits their note
+        approved = note['approved']
+        if user_role not in ['admin', 'moderator']:
+            approved = 0
+
         cursor.execute("""
             UPDATE notes SET title=?, command=?, description=?, note_type=?,
-            category_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-        """, (title, command, description, note_type, category_id, note_id))
+            category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
+        """, (title, command, description, note_type, category_id, approved, note_id))
 
         if steps is not None:
             _save_steps(cursor, note_id, steps)
@@ -652,7 +709,10 @@ def delete_note(note_id):
         if not note:
             return jsonify({'message': 'Note not found'}), 404
 
-        if note['created_by'] != request.user['sub'] and request.user.get('role') != 'admin':
+        user_role = request.user.get('role', 'author')
+        is_creator = (note['created_by'] == request.user['sub'])
+        
+        if user_role not in ['admin', 'moderator'] and not is_creator:
             return jsonify({'message': 'Permission denied'}), 403
 
         # Collect image files to delete from disk
@@ -800,6 +860,50 @@ def restore_db():
                 os.remove(temp_path)
             return jsonify({'message': f'Invalid database file or integrity check failed: {e}'}), 400
     return jsonify({'message': 'Invalid file type. Must be a .db file'}), 400
+
+@app.route('/api/notes/<int:note_id>/approve', methods=['POST'])
+@login_required
+def approve_note(note_id):
+    user_role = request.user.get('role', 'author')
+    if user_role not in ['admin', 'moderator']:
+        return jsonify({'message': 'Moderator or Admin privilege required!'}), 403
+        
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM notes WHERE id = ?", (note_id,))
+        if not cursor.fetchone():
+            return jsonify({'message': 'Note not found'}), 404
+            
+        cursor.execute("UPDATE notes SET approved = 1 WHERE id = ?", (note_id,))
+        conn.commit()
+        return jsonify({'message': 'Note approved successfully'})
+    finally:
+        conn.close()
+
+@app.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def admin_reset_password(user_id):
+    conn = get_db()
+    try:
+        data = request.json
+        new_password = data.get('password')
+        if not new_password or not new_password.strip():
+            return jsonify({'message': 'Password cannot be empty'}), 400
+            
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            return jsonify({'message': 'User not found'}), 404
+            
+        cursor.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (generate_password_hash(new_password), user_id)
+        )
+        conn.commit()
+        return jsonify({'message': 'Password reset successfully'})
+    finally:
+        conn.close()
 
 @app.after_request
 def add_security_headers(response):

@@ -59,6 +59,7 @@
     let currentView = localStorage.getItem('sn_view') || 'view-stack';
     let activeCategory = null;
     let activeCategoryName = null;
+    let activePending = false;
     let activeTag = null;
     let allNotes = [];
     let allCategories = [];
@@ -191,11 +192,14 @@
             loggedOut.style.display = 'none';
             loggedIn.style.display = 'flex';
             usernameEl.textContent = currentUsername || '';
-            if (adminBtn) adminBtn.style.display = currentRole === 'admin' ? '' : 'none';
+            if (adminBtn) adminBtn.style.display = (currentRole === 'admin' || currentRole === 'moderator') ? '' : 'none';
+            updatePendingCount();
         } else {
             loggedOut.style.display = 'flex';
             loggedIn.style.display = 'none';
             if (adminBtn) adminBtn.style.display = 'none';
+            const pendingNav = document.getElementById('sidebar-pending-notes');
+            if (pendingNav) pendingNav.style.display = 'none';
         }
     }
 
@@ -204,6 +208,7 @@
         localStorage.removeItem('sn_token');
         localStorage.removeItem('sn_role');
         localStorage.removeItem('sn_username');
+        activePending = false;
         updateAuthUI();
         if (isAdminPageOpen) closeAdminPage();
         renderNotes(allNotes);
@@ -213,6 +218,8 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function closeAllModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); }
+    window.openModal = openModal;
+    window.closeModal = closeModal;
 
     // ─── ADMIN PAGE ──────────────────────────────────────
     function openAdminPage() {
@@ -222,9 +229,31 @@
         document.getElementById('category-cards-grid').style.display = 'none';
         document.querySelector('.top-bar').style.display = 'none';
         document.getElementById('admin-page').style.display = 'block';
-        loadAdminCategories();
-        loadAdminUsers();
-        loadAdminSettings();
+
+        const optPending = document.getElementById('opt-pending-tab-btn');
+        const optCategories = document.getElementById('opt-categories-tab-btn');
+        const optUsers = document.getElementById('opt-users-tab-btn');
+        const optSettings = document.getElementById('opt-settings-tab-btn');
+        const optBackup = document.getElementById('opt-backup-tab-btn');
+
+        if (currentRole === 'moderator') {
+            if (optCategories) optCategories.style.display = 'none';
+            if (optUsers) optUsers.style.display = 'none';
+            if (optSettings) optSettings.style.display = 'none';
+            if (optBackup) optBackup.style.display = 'none';
+            loadPendingNotes();
+        } else {
+            if (optCategories) optCategories.style.display = '';
+            if (optUsers) optUsers.style.display = '';
+            if (optSettings) optSettings.style.display = '';
+            if (optBackup) optBackup.style.display = '';
+            loadPendingNotes();
+            loadAdminCategories();
+            loadAdminUsers();
+            loadAdminSettings();
+        }
+        
+        switchAdminTab('ap-pending-tab');
     }
 
     function closeAdminPage() {
@@ -500,8 +529,9 @@
         if (q) params.push('q=' + encodeURIComponent(q));
         if (activeCategory) params.push('category=' + activeCategory);
         if (activeTag) params.push('tag=' + encodeURIComponent(activeTag));
+        if (activePending) params.push('status=pending');
         url += params.join('&');
-        const res = await apiFetch(url);
+        const res = await apiFetch(url, { headers: authHeaders() });
         if (!res) return;
         allNotes = await res.json();
         renderNotes(allNotes);
@@ -535,7 +565,7 @@
         if (st) st.textContent = data.total_tags || 0;
     }
 
-    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); }
+    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); updatePendingCount(); }
 
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
@@ -570,6 +600,7 @@
                     activeCategoryName = cat ? cat.name : '';
                 }
                 activeTag = null;
+                activePending = false;
                 updateFilterIndicator();
                 fetchNotes();
                 renderSidebarCategories(allCategories);
@@ -597,7 +628,7 @@
                 const id = item.dataset.id;
                 if (activeCategory == id) { activeCategory = null; activeCategoryName = null; }
                 else { activeCategory = id; const cat = allCategories.find(c => c.id == id); activeCategoryName = cat ? cat.name : ''; }
-                activeTag = null;
+                activeTag = null; activePending = false;
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
             });
@@ -620,7 +651,7 @@
                 const tagName = pill.dataset.tag;
                 if (activeTag === tagName) { activeTag = null; }
                 else { activeTag = tagName; }
-                activeCategory = null; activeCategoryName = null;
+                activeCategory = null; activeCategoryName = null; activePending = false;
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
             });
@@ -631,7 +662,10 @@
     function updateFilterIndicator() {
         const el = document.getElementById('filter-indicator');
         const textEl = document.getElementById('filter-indicator-text');
-        if (activeCategory) {
+        if (activePending) {
+            textEl.innerHTML = '<span style="color:#f59e0b; display:flex; align-items:center; gap:6px;">⏱️ My Pending Notes</span>';
+            el.style.display = 'inline-flex';
+        } else if (activeCategory) {
             textEl.textContent = 'Category: ' + (activeCategoryName || activeCategory);
             el.style.display = 'inline-flex';
         } else if (activeTag) {
@@ -643,9 +677,44 @@
     }
 
     function clearFilter() {
-        activeCategory = null; activeCategoryName = null; activeTag = null;
+        activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false;
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+    }
+
+    window.showMyPendingNotes = function() {
+        if (currentRole === 'admin' || currentRole === 'moderator') {
+            openAdminPage();
+            switchAdminTab('ap-pending-tab');
+        } else {
+            activePending = true;
+            activeCategory = null; activeCategoryName = null; activeTag = null;
+            document.getElementById('notes-container').style.display = '';
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('category-cards-grid').style.display = 'none';
+            if (isAdminPageOpen) closeAdminPage();
+            updateFilterIndicator();
+            fetchNotes();
+            if (window.innerWidth <= 768) closeSidebar();
+        }
+    };
+    
+    async function updatePendingCount() {
+        if (!currentToken) {
+            document.getElementById('sidebar-pending-notes').style.display = 'none';
+            return;
+        }
+        try {
+            const res = await apiFetch('api/notes?status=pending', { headers: authHeaders() });
+            if (res && res.ok) {
+                const notes = await res.json();
+                const count = notes.length;
+                document.getElementById('sidebar-pending-count').textContent = count;
+                document.getElementById('sidebar-pending-notes').style.display = count > 0 ? 'block' : 'none';
+            }
+        } catch (err) {
+            console.error('Error fetching pending notes count', err);
+        }
     }
 
     function populateCategoryDropdowns(categories) {
@@ -661,155 +730,168 @@
     }
 
     // ─── RENDER: NOTES ───────────────────────────────────
-    function renderNotes(notes) {
-        const container = document.getElementById('notes-container');
-        const emptyState = document.getElementById('empty-state');
-        if (isAdminPageOpen) return;
-
-        if (!notes || notes.length === 0) {
-            container.innerHTML = '';
-            emptyState.style.display = 'flex';
-            return;
-        }
-        emptyState.style.display = 'none';
-
-        let html = '';
-        notes.forEach((note, idx) => {
-            const delay = Math.min(idx * 0.04, 0.4);
-            const tagsHtml = (note.tags || []).map(t => `<span class="note-tag-pill">${escapeHTML(t)}</span>`).join('');
-            const categoryBadge = note.category_name
-                ? `<span class="note-category-badge">${ICONS.folder} ${escapeHTML(note.category_name)}</span>` : '';
-            const metaHtml = `<span class="note-meta-user">${ICONS.user} ${escapeHTML(note.created_by_username || 'Unknown')}</span>`;
-            const actions = currentToken
+    function buildNoteCardHtml(note, isReviewMode, delay) {
+        const tagsHtml = (note.tags || []).map(t => `<span class="note-tag-pill">${escapeHTML(t)}</span>`).join('');
+        const categoryBadge = note.category_name
+            ? `<span class="note-category-badge">${ICONS.folder} ${escapeHTML(note.category_name)}</span>` : '';
+        const metaHtml = `<span class="note-meta-user">${ICONS.user} ${escapeHTML(note.created_by_username || 'Unknown')}</span>`;
+        const isCreator = (currentToken && note.created_by_username === currentUsername);
+        const canModify = currentToken && (currentRole === 'admin' || currentRole === 'moderator' || isCreator);
+        
+        const actions = isReviewMode
+            ? ''
+            : (canModify
                 ? `<div class="note-actions">
                     <button class="btn-icon note-edit-btn" data-id="${note.id}" title="Edit">${ICONS.edit}</button>
                     <button class="btn-icon btn-icon-danger note-delete-btn" data-id="${note.id}" title="Delete">${ICONS.trash}</button>
-                   </div>` : '';
+                   </div>` : '');
 
-            const isProcedure = note.note_type === 'procedure';
-            const typeBadge = `<span class="note-type-badge ${isProcedure ? 'type-procedure' : 'type-command'}">${isProcedure ? ICONS.steps + ' Procedure' : ICONS.copy + ' Command'}</span>`;
+        const isProcedure = note.note_type === 'procedure';
+        const typeBadge = `<span class="note-type-badge ${isProcedure ? 'type-procedure' : 'type-command'}">${isProcedure ? ICONS.steps + ' Procedure' : ICONS.copy + ' Command'}</span>`;
+        
+        const pendingBadge = !note.approved
+            ? `<span class="note-pending-badge" style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); margin-left: 8px; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; border: 1px solid rgba(245, 158, 11, 0.3);">⏱️ Pending</span>`
+            : '';
 
-            if (isProcedure) {
-                // Render procedure note summary (excerpt only)
-                const steps = note.steps || [];
+        if (isProcedure) {
+            const steps = note.steps || [];
+            let stepsContentHtml = '';
+            if (isReviewMode) {
+                stepsContentHtml = steps.map((step, si) => `
+                    <div style="margin-top: 10px; background: var(--bg-tertiary); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                        <div style="font-weight: 600; color: var(--text); font-size: 0.9rem;">
+                            Step ${si + 1}: ${escapeHTML(step.title || '')}
+                        </div>
+                        ${step.description ? `<p style="margin-top: 4px; font-size: 0.88rem; color: var(--text-secondary);">${escapeHTML(step.description)}</p>` : ''}
+                        ${step.command ? `<pre style="background: var(--bg-primary); padding: 8px 12px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.82rem; border: 1px solid var(--border); color: var(--text); margin-top: 6px;"><code>${escapeHTML(step.command)}</code></pre>` : ''}
+                    </div>
+                `).join('');
+            } else {
                 const previewSteps = steps.slice(0, 3);
                 const remaining = steps.length - previewSteps.length;
-                const stepsPreviewHtml = previewSteps.map((step, si) => `
+                const previewHtml = previewSteps.map((step, si) => `
                     <div class="step-preview-item">
                         <span class="step-preview-num">${si + 1}</span>
                         <span class="step-preview-text">${escapeHTML(step.title || 'Step ' + (si + 1))}</span>
                     </div>`).join('');
-
-                html += `<div class="note-item note-type-procedure" style="animation-delay:${delay}s" data-note-id="${note.id}">
-                    <div style="width:100%;">
-                        <div class="note-header">
-                            <div>
-                                ${typeBadge}
-                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
-                            </div>
-                            ${actions}
-                        </div>
-                        ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
-                        
-                        <div class="procedure-card-summary">
-                            <div class="step-preview-stack">${stepsPreviewHtml}</div>
-                            ${remaining > 0 ? `<div class="step-preview-more">+${remaining} more step${remaining > 1 ? 's' : ''} &rarr;</div>` : ''}
-                        </div>
-
-                        <div class="note-meta">
-                            ${categoryBadge}
-                            ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
-                            ${metaHtml}
-                            <span class="note-meta-steps">${ICONS.steps} ${steps.length} steps</span>
-                        </div>
+                stepsContentHtml = `
+                    <div class="procedure-card-summary">
+                        <div class="step-preview-stack">${previewHtml}</div>
+                        ${remaining > 0 ? `<div class="step-preview-more">+${remaining} more step${remaining > 1 ? 's' : ''} &rarr;</div>` : ''}
                     </div>
-                </div>`;
-            } else if (note.note_type === 'document') {
-                const noteImgsHtml = (note.images || []).map(img => {
-                    if (isDocumentUrl(img.url)) {
-                        return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; width:80px; height:80px;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
-                    }
-                    return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
-                }).join('');
-
-                html += `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
-                    <div style="width:100%;">
-                        <div class="note-header">
-                            <div>
-                                <span class="note-type-badge type-procedure" style="background-color: var(--secondary);">${ICONS.file_pdf} DOCS / SOP</span>
-                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
-                            </div>
-                            ${actions}
-                        </div>
-                        ${note.description ? `<p class="note-description" style="margin-top:10px;">${autolink(note.description)}</p>` : ''}
-                        ${noteImgsHtml ? `<div class="note-inline-images" style="margin-top:10px;">${noteImgsHtml}</div>` : ''}
-                        
-                        <div class="note-meta">
-                            ${categoryBadge}
-                            ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
-                            ${metaHtml}
-                        </div>
-                    </div>
-                </div>`;
-            } else if (note.note_type === 'plain') {
-                let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : escapeHTML(note.description || '');
-                const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Plain Note</span>`;
-                html += `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
-                    <div style="width:100%;">
-                        <div class="note-header">
-                            <div>
-                                ${typeBadgePlain}
-                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
-                            </div>
-                            ${actions}
-                        </div>
-                        <div class="markdown-body" style="padding:1rem 0; font-size:14px; line-height:1.6;">${renderedHtml}</div>
-                        
-                        <div class="note-meta">
-                            ${categoryBadge}
-                            ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
-                            ${metaHtml}
-                        </div>
-                    </div>
-                </div>`;
-            } else {
-                // Quick command note
-                const noteImgsHtml = (note.images || []).map(img => {
-                    if (isDocumentUrl(img.url)) {
-                        return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
-                    }
-                    return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
-                }).join('');
-
-                html += `<div class="note-item" style="animation-delay:${delay}s" data-note-id="${note.id}">
-                    <div class="note-info">
-                        <div class="note-header">
-                            <div>
-                                ${typeBadge}
-                                <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
-                            </div>
-                            ${actions}
-                        </div>
-                        ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
-                        <div class="note-meta">
-                            ${categoryBadge}
-                            ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
-                            ${metaHtml}
-                        </div>
-                        ${noteImgsHtml ? `<div class="note-inline-images">${noteImgsHtml}</div>` : ''}
-                    </div>
-                    <div class="note-command-wrapper">
-                        <div class="note-code-block">
-                            <pre class="note-code"><code>${escapeHTML(note.command)}</code></pre>
-                            <button class="note-copy-btn" title="Copy">${ICONS.copy}</button>
-                        </div>
-                    </div>
-                </div>`;
+                `;
             }
-        });
 
-        container.innerHTML = html;
+            return `<div class="note-item note-type-procedure" style="animation-delay:${delay}s" data-note-id="${note.id}">
+                <div style="width:100%;">
+                    <div class="note-header">
+                        <div>
+                            ${typeBadge}
+                            ${pendingBadge}
+                            <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                        </div>
+                        ${actions}
+                    </div>
+                    ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
+                    
+                    ${stepsContentHtml}
 
+                    <div class="note-meta">
+                        ${categoryBadge}
+                        ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
+                        ${metaHtml}
+                        <span class="note-meta-steps">${ICONS.steps} ${steps.length} steps</span>
+                    </div>
+                </div>
+            </div>`;
+        } else if (note.note_type === 'document') {
+            const noteImgsHtml = (note.images || []).map(img => {
+                if (isDocumentUrl(img.url)) {
+                    return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; width:80px; height:80px;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
+                }
+                return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
+            }).join('');
+
+            return `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
+                <div style="width:100%;">
+                    <div class="note-header">
+                        <div>
+                            <span class="note-type-badge type-procedure" style="background-color: var(--secondary);">${ICONS.file_pdf} DOCS / SOP</span>
+                            ${pendingBadge}
+                            <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                        </div>
+                        ${actions}
+                    </div>
+                    ${note.description ? `<p class="note-description" style="margin-top:10px;">${autolink(note.description)}</p>` : ''}
+                    ${noteImgsHtml ? `<div class="note-inline-images" style="margin-top:10px;">${noteImgsHtml}</div>` : ''}
+                    
+                    <div class="note-meta">
+                        ${categoryBadge}
+                        ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
+                        ${metaHtml}
+                    </div>
+                </div>
+            </div>`;
+        } else if (note.note_type === 'plain') {
+            let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : escapeHTML(note.description || '');
+            const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Plain Note</span>`;
+            return `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
+                <div style="width:100%;">
+                    <div class="note-header">
+                        <div>
+                            ${typeBadgePlain}
+                            ${pendingBadge}
+                            <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                        </div>
+                        ${actions}
+                    </div>
+                    <div class="markdown-body" style="padding:1rem 0; font-size:14px; line-height:1.6;">${renderedHtml}</div>
+                    
+                    <div class="note-meta">
+                        ${categoryBadge}
+                        ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
+                        ${metaHtml}
+                    </div>
+                </div>
+            </div>`;
+        } else {
+            // Quick command note
+            const noteImgsHtml = (note.images || []).map(img => {
+                if (isDocumentUrl(img.url)) {
+                    return `<div class="note-inline-image doc-link" data-src="${escapeHTML(img.url)}" style="cursor:pointer; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">${getDocumentThumb(img.url, img.name || 'Document')}</div>`;
+                }
+                return `<div class="note-inline-image" data-src="${escapeHTML(img.url)}"><img src="${escapeHTML(img.url)}" alt=""></div>`;
+            }).join('');
+
+            return `<div class="note-item" style="animation-delay:${delay}s" data-note-id="${note.id}">
+                <div class="note-info">
+                    <div class="note-header">
+                        <div>
+                            ${typeBadge}
+                            ${pendingBadge}
+                            <a href="note/${note.id}" target="_blank" class="note-title-link"><h3 class="note-title">${escapeHTML(note.title)}</h3></a>
+                        </div>
+                        ${actions}
+                    </div>
+                    ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
+                    <div class="note-meta">
+                        ${categoryBadge}
+                        ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
+                        ${metaHtml}
+                    </div>
+                    ${noteImgsHtml ? `<div class="note-inline-images">${noteImgsHtml}</div>` : ''}
+                </div>
+                <div class="note-command-wrapper">
+                    <div class="note-code-block">
+                        <pre class="note-code"><code>${escapeHTML(note.command)}</code></pre>
+                        <button class="note-copy-btn" title="Copy">${ICONS.copy}</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+    }
+
+    function attachNoteCardEventListeners(container, isReviewMode) {
         // Attach copy buttons
         container.querySelectorAll('.note-copy-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -827,9 +909,11 @@
             });
         });
 
-        // Attach edit/delete
-        container.querySelectorAll('.note-edit-btn').forEach(btn => btn.addEventListener('click', () => openEditNoteModal(btn.dataset.id)));
-        container.querySelectorAll('.note-delete-btn').forEach(btn => btn.addEventListener('click', () => deleteNote(btn.dataset.id)));
+        if (!isReviewMode) {
+            // Attach edit/delete
+            container.querySelectorAll('.note-edit-btn').forEach(btn => btn.addEventListener('click', () => openEditNoteModal(btn.dataset.id)));
+            container.querySelectorAll('.note-delete-btn').forEach(btn => btn.addEventListener('click', () => deleteNote(btn.dataset.id)));
+        }
 
         // Image lightbox
         container.querySelectorAll('.procedure-step-image, .note-inline-image').forEach(el => {
@@ -841,6 +925,28 @@
                 }
             });
         });
+    }
+
+    function renderNotes(notes) {
+        const container = document.getElementById('notes-container');
+        const emptyState = document.getElementById('empty-state');
+        if (isAdminPageOpen) return;
+
+        if (!notes || notes.length === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'flex';
+            return;
+        }
+        emptyState.style.display = 'none';
+
+        let html = '';
+        notes.forEach((note, idx) => {
+            const delay = Math.min(idx * 0.04, 0.4);
+            html += buildNoteCardHtml(note, false, delay);
+        });
+
+        container.innerHTML = html;
+        attachNoteCardEventListeners(container, false);
     }
 
     // --- RENDER: MODAL EDIT ---
@@ -981,7 +1087,7 @@
 
     async function deleteNote(id) {
         if (!confirm('Are you sure you want to delete this command?')) return;
-        const res = await apiFetch('api/notes/' + id, { method: 'DELETE' });
+        const res = await apiFetch('api/notes/' + id, { method: 'DELETE', headers: authHeaders() });
         if (res && res.ok) {
             showToast('Command deleted');
             fetchNotes();
@@ -1092,7 +1198,7 @@
 
         // Upload new step images
         if (noteType === 'procedure' && steps.length > 0) {
-            const noteRes2 = await apiFetch('api/notes');
+            const noteRes2 = await apiFetch('api/notes', { headers: authHeaders() });
             if (noteRes2 && noteRes2.ok) {
                 const allN = await noteRes2.json();
                 const updatedNote = allN.find(n => n.id == noteId);
@@ -1194,17 +1300,131 @@
             const isSelf = u.username === currentUsername;
             html += `<tr>
                 <td>${escapeHTML(u.username)}${isSelf ? ' <span style="color:var(--accent);font-size:0.75rem;">(you)</span>' : ''}</td>
-                <td><span class="status-badge ${u.role === 'admin' ? 'enabled' : 'disabled'}">${escapeHTML(u.role)}</span></td>
-                <td>${!isSelf ? `<button class="btn-icon btn-icon-danger user-delete-btn" data-user-id="${u.id}">${ICONS.trash}</button>` : ''}</td>
+                <td><span class="status-badge ${u.role === 'admin' ? 'enabled' : (u.role === 'moderator' ? 'moderator' : 'disabled')}">${escapeHTML(u.role)}</span></td>
+                <td>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        ${!isSelf ? `<button class="btn-icon user-reset-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" title="Reset Password" style="color:var(--success);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>` : ''}
+                        ${!isSelf ? `<button class="btn-icon btn-icon-danger user-delete-btn" data-user-id="${u.id}">${ICONS.trash}</button>` : ''}
+                    </div>
+                </td>
             </tr>`;
         });
         tbody.innerHTML = html;
+        
+        tbody.querySelectorAll('.user-reset-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newPassword = prompt(`Enter new password for ${btn.dataset.username}:`);
+                if (newPassword === null) return;
+                if (!newPassword.trim()) { alert("Password cannot be empty"); return; }
+                
+                const res = await apiFetch(`api/users/${btn.dataset.userId}/reset-password`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ password: newPassword.trim() })
+                });
+                if (res && res.ok) {
+                    showToast('Password reset successfully!');
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showToast(err.message || 'Failed to reset password', true);
+                }
+            });
+        });
+
         tbody.querySelectorAll('.user-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Delete this user?')) return;
                 const res = await apiFetch('api/users/' + btn.dataset.userId, { method: 'DELETE', headers: authHeaders() });
                 if (res && res.ok) { showToast('User deleted.'); loadAdminUsers(); }
                 else { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to delete user', true); }
+            });
+        });
+    }
+
+    async function loadPendingNotes() {
+        const res = await apiFetch('api/notes?status=pending', { headers: authHeaders() });
+        if (!res || !res.ok) return;
+        renderPendingNotes(await res.json());
+    }
+
+    function renderPendingNotes(notes) {
+        let tbody = document.getElementById('ap-pending-table-body');
+        
+        if (!tbody) {
+            const container = document.getElementById('ap-pending-cards-container');
+            if (!container) return;
+            
+            container.innerHTML = `
+                <div class="table-wrapper">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ap-pending-table-body"></tbody>
+                    </table>
+                </div>`;
+            container.style = "";
+            container.className = "";
+            tbody = document.getElementById('ap-pending-table-body');
+        }
+        
+        if (!notes || notes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-secondary); padding:2rem 0;">No pending notes to review.</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        notes.forEach((note) => {
+            const isProcedure = note.note_type === 'procedure';
+            const typeBadge = `<span class="note-type-badge ${isProcedure ? 'type-procedure' : 'type-command'}">${isProcedure ? ICONS.steps + ' Procedure' : ICONS.copy + ' Command'}</span>`;
+            const catBadge = `<span class="note-category-badge">${ICONS.folder} ${escapeHTML(note.category_name || 'Uncategorized')}</span>`;
+            html += `<tr>
+                <td>${typeBadge}</td>
+                <td><strong>${escapeHTML(note.title)}</strong></td>
+                <td>${catBadge}</td>
+                <td>
+                    <button class="btn btn-xs btn-primary pending-review-btn" data-note='${escapeHTML(JSON.stringify(note))}' style="padding: 4px 10px; font-weight: 600;">Review</button>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+        
+        tbody.querySelectorAll('.pending-review-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const note = JSON.parse(btn.dataset.note);
+                const modalBody = document.getElementById('pending-review-modal-body');
+                modalBody.innerHTML = buildNoteCardHtml(note, true, 0);
+                attachNoteCardEventListeners(modalBody, true);
+                
+                document.getElementById('pending-review-approve-btn').onclick = async () => {
+                    const res = await apiFetch(`api/notes/${note.id}/approve`, { method: 'POST', headers: authHeaders() });
+                    if (res && res.ok) {
+                        showToast('Note approved!');
+                        closeModal('pending-review-modal');
+                        loadPendingNotes();
+                    } else {
+                        showToast('Failed to approve', true);
+                    }
+                };
+                
+                document.getElementById('pending-review-reject-btn').onclick = async () => {
+                    if (!confirm('Are you sure you want to reject and delete this note?')) return;
+                    const res = await apiFetch(`api/notes/${note.id}`, { method: 'DELETE', headers: authHeaders() });
+                    if (res && res.ok) {
+                        showToast('Note rejected and deleted!');
+                        closeModal('pending-review-modal');
+                        loadPendingNotes();
+                    } else {
+                        showToast('Failed to reject', true);
+                    }
+                };
+                
+                openModal('pending-review-modal');
             });
         });
     }
@@ -1265,7 +1485,7 @@
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Restore failed', true); return; }
         showToast('Database restored! Refreshing...'); fileInput.value = '';
-        setTimeout(() => { refreshAll(); loadAdminCategories(); loadAdminUsers(); }, 500);
+        setTimeout(() => { refreshAll(); loadAdminCategories(); loadAdminUsers(); loadPendingNotes(); }, 500);
     }
 
     async function handleChangePassword(e) {
@@ -1333,7 +1553,6 @@
             theme: 'snow',
             bounds: document.body,
             modules: {
-                imageResize: { displaySize: true },
                 toolbar: [
                     [{ 'header': [1, 2, 3, false] }],
                     ['bold', 'italic', 'underline', 'strike'],
@@ -1480,5 +1699,26 @@
             }
         });
     });
+
+    // Ensure pending review modal exists (in case index.html is cached)
+    if (!document.getElementById('pending-review-modal')) {
+        const modalHtml = `
+        <div id="pending-review-modal" class="modal-overlay" style="display:none;">
+            <div class="modal" style="max-width: 800px; width: 90%;">
+                <div class="modal-header">
+                    <h3>Review Note</h3>
+                    <button class="modal-close-btn" onclick="closeModal('pending-review-modal')">×</button>
+                </div>
+                <div class="modal-body" id="pending-review-modal-body" style="padding: 20px; background: var(--bg-body); max-height: 70vh; overflow-y: auto;">
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px; border-top: 1px solid var(--border-color);">
+                    <button class="btn btn-ghost" onclick="closeModal('pending-review-modal')">Cancel</button>
+                    <button id="pending-review-reject-btn" class="btn btn-danger">Reject</button>
+                    <button id="pending-review-approve-btn" class="btn btn-success">Approve</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
 
 })();

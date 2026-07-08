@@ -30,7 +30,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'user'
+            role TEXT DEFAULT 'author'
         )
     ''')
 
@@ -66,6 +66,7 @@ def init_db():
             description TEXT,
             note_type TEXT DEFAULT 'command',
             category_id INTEGER,
+            approved INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             created_by INTEGER,
@@ -74,11 +75,16 @@ def init_db():
         )
     ''')
 
-    # Migration: add note_type column if missing
+    # Migration: add note_type/approved columns if missing
     cursor.execute("PRAGMA table_info(notes)")
     note_cols = [col[1] for col in cursor.fetchall()]
     if 'note_type' not in note_cols:
         cursor.execute("ALTER TABLE notes ADD COLUMN note_type TEXT DEFAULT 'command'")
+    if 'approved' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN approved INTEGER DEFAULT 1")
+
+    # Migration: update existing 'user' roles to 'author'
+    cursor.execute("UPDATE users SET role = 'author' WHERE role = 'user'")
 
     # Note Steps table (for procedural notes)
     cursor.execute('''

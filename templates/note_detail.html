@@ -681,6 +681,13 @@
             if (isPlain) { badgeType = 'procedure'; badgeText = 'Plain Note'; }
             if (isDocument) { badgeType = 'procedure'; badgeText = 'DOCS / SOP'; }
 
+            let pendingBadge = '';
+            if (!note.approved) {
+                pendingBadge = `<div class="note-type-badge" style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 600; margin-left: 8px;">
+                    ⏱️ Pending Approval
+                </div>`;
+            }
+
             let descHtml = '';
             if (note.description) {
                 if (isPlain) {
@@ -693,9 +700,12 @@
 
             // Header card
             html += `<div class="note-header-card ${isProcedure ? 'is-procedure' : ''}">
-                <div class="note-type-badge ${badgeType}">
-                    <span class="dot"></span>
-                    ${badgeText}
+                <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <div class="note-type-badge ${badgeType}">
+                        <span class="dot"></span>
+                        ${badgeText}
+                    </div>
+                    ${pendingBadge}
                 </div>
                 <h1 class="note-title">${esc(note.title)}</h1>
                 ${descHtml}
