@@ -91,6 +91,11 @@
         const urlPattern = /((?:https?|ftp):\/\/[^\s<]+)/g;
         let result = escaped.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
         
+        const fileUrlPattern = /(file:\/\/[^\s<]+)/g;
+        result = result.replace(fileUrlPattern, function(match) {
+            return `<a href="${match}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-secondary btn-xs copy-path-btn" data-path="${escapeHTML(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Link</button>`;
+        });
+
         const uncPattern = /(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
         result = result.replace(uncPattern, function(match) {
             const cleanPath = match.replace(/\\/g, '/');
@@ -227,7 +232,6 @@
         document.getElementById('notes-container').style.display = 'none';
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = 'none';
-        document.querySelector('.top-bar').style.display = 'none';
         document.getElementById('admin-page').style.display = 'block';
 
         const optPending = document.getElementById('opt-pending-tab-btn');
@@ -259,7 +263,6 @@
     function closeAdminPage() {
         isAdminPageOpen = false;
         document.getElementById('admin-page').style.display = 'none';
-        document.querySelector('.top-bar').style.display = '';
         document.getElementById('category-cards-grid').style.display = '';
         document.getElementById('notes-container').style.display = '';
         renderNotes(allNotes);
@@ -629,6 +632,7 @@
                 if (activeCategory == id) { activeCategory = null; activeCategoryName = null; }
                 else { activeCategory = id; const cat = allCategories.find(c => c.id == id); activeCategoryName = cat ? cat.name : ''; }
                 activeTag = null; activePending = false;
+                if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
             });
@@ -652,6 +656,7 @@
                 if (activeTag === tagName) { activeTag = null; }
                 else { activeTag = tagName; }
                 activeCategory = null; activeCategoryName = null; activePending = false;
+                if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
             });
@@ -678,6 +683,7 @@
 
     function clearFilter() {
         activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false;
+        if (isAdminPageOpen) closeAdminPage();
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
     }
