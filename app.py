@@ -570,7 +570,7 @@ def get_last_updated():
         last_update = row['last_update'] if row and row['last_update'] else ""
         return jsonify({"last_update": last_update})
     finally:
-        close_db(conn)
+        conn.close()
 @app.route('/api/notes', methods=['GET'])
 def get_notes():
     conn = get_db()
