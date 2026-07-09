@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 if __name__ == "__main__":
-    host = os.getenv('HOST', '0.0.0.0')
+    host = os.getenv('HOST', '127.0.0.1')
     try:
-        port = int(os.getenv('PORT', '5005'))
+        port = int(os.getenv('PORT', '5006'))
     except ValueError:
-        port = 5005
+        port = 5006
     # Configure dual logging to console and file
     log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log_file_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'sysnotes.log')

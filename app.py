@@ -118,6 +118,10 @@ class ProxyDispatcherMiddleware:
 
 app.wsgi_app = ProxyDispatcherMiddleware(app.wsgi_app)
 
+@app.before_request
+def force_https():
+    request.environ['wsgi.url_scheme'] = 'https'
+
 # Serve Frontend SPA
 @app.route('/')
 def serve_index():
