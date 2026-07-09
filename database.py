@@ -134,6 +134,18 @@ def init_db():
         )
     ''')
 
+    # Audit Logs table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id INTEGER,
+            action TEXT NOT NULL,
+            username TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            details TEXT
+        )
+    ''')
+
     # FTS5 Virtual Table for blazing fast search on notes
     cursor.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(

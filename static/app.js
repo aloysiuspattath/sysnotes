@@ -1767,3 +1767,33 @@
     }
 
 })();
+
+    // --- Audit Logs ---
+    async function loadAdminAudit() {
+        const res = await apiFetch('api/audit', { headers: authHeaders() });
+        if (!res || !res.ok) return;
+        renderAdminAudit(await res.json());
+    }
+
+    function renderAdminAudit(logs) {
+        const tbody = document.getElementById('ap-audit-tbody');
+        if (!tbody) return;
+        let html = '';
+        logs.forEach(l => {
+            const dateStr = new Date(l.timestamp + 'Z').toLocaleString();
+            let actionColor = 'var(--text)';
+            if(l.action === 'CREATED') actionColor = 'var(--success)';
+            if(l.action === 'DELETED') actionColor = 'var(--danger)';
+            if(l.action === 'APPROVED') actionColor = 'var(--accent)';
+            if(l.action === 'UPDATED') actionColor = '#f59e0b'; // warning/orange
+            
+            html += `<tr>
+                <td style="font-size:0.85rem; color:var(--text-secondary);">${dateStr}</td>
+                <td style="font-weight:600;">${escapeHTML(l.username || 'System')}</td>
+                <td><span style="color:${actionColor};font-weight:bold;font-size:0.8rem;">${escapeHTML(l.action)}</span></td>
+                <td>${l.note_id || '-'}</td>
+                <td style="font-size:0.9rem; color:var(--text-secondary);">${escapeHTML(l.details || '')}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }

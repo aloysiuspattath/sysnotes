@@ -717,6 +717,7 @@ def create_note():
         if tags:
             _link_tags_to_note(cursor, conn, note_id, tags)
 
+        log_audit(conn, note_id, 'CREATED', request.user['username'], f"Note created (approved={bool(approved)})")
         conn.commit()
         message = 'Note created' if approved == 1 else 'Note created and is pending approval'
         return jsonify({'message': message, 'id': note_id, 'approved': bool(approved)}), 201
@@ -797,6 +798,7 @@ def delete_note(note_id):
 
         cursor.execute("DELETE FROM note_tags WHERE note_id = ?", (note_id,))
         cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        log_audit(conn, note_id, 'DELETED', request.user['username'], f"Note deleted: {note['title']}")
         conn.commit()
 
         # Remove image files from disk
@@ -952,6 +954,7 @@ def approve_note(note_id):
             return jsonify({'message': 'Note not found'}), 404
             
         cursor.execute("UPDATE notes SET approved = 1 WHERE id = ?", (note_id,))
+        log_audit(conn, note_id, 'APPROVED', request.user['username'], "Note approved")
         conn.commit()
         return jsonify({'message': 'Note approved successfully'})
     finally:
@@ -991,3 +994,36 @@ def add_security_headers(response):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5005, debug=True)
+
+# ================= AUDIT LOGS ================= #
+
+def log_audit(conn, note_id, action, username, details=""):
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO audit_logs (note_id, action, username, details) VALUES (?, ?, ?, ?)",
+        (note_id, action, username, details)
+    )
+
+@app.route('/api/audit', methods=['GET'])
+@admin_required
+def get_global_audit():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100")
+        logs = [dict(row) for row in cursor.fetchall()]
+        return jsonify(logs)
+    finally:
+        conn.close()
+
+@app.route('/api/notes/<int:note_id>/audit', methods=['GET'])
+def get_note_audit(note_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM audit_logs WHERE note_id = ? ORDER BY timestamp DESC", (note_id,))
+        logs = [dict(row) for row in cursor.fetchall()]
+        return jsonify(logs)
+    finally:
+        conn.close()
+
