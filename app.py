@@ -17,6 +17,47 @@ from datetime import datetime
 from dotenv import load_dotenv
 import secrets
 
+import requests
+import xml.etree.ElementTree as ET
+import html
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+def check_ad_login(username, password):
+    url = "https://10.250.7.210/sso/adloginwithRoles.asmx"
+    username = html.escape(username)
+    password = html.escape(password)
+
+    payload = f"""<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                 xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+                 xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <userAttributes xmlns="http://tempuri.org/">
+      <username>{username}</username>
+      <password>{password}</password>
+    </userAttributes>
+  </soap12:Body>
+</soap12:Envelope>"""
+
+    headers = {'Content-Type': 'application/soap+xml'}
+
+    try:
+        response = requests.post(url, headers=headers, data=payload, verify=False, timeout=5)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"AD server connection failed: {e}")
+        return ("ERROR", None)
+
+    root = ET.fromstring(response.text)
+    result_element = root.find('.//{*}Result')
+    name_element = root.find('.//{*}Name')
+    if result_element is not None:
+        return (result_element.text, name_element.text if name_element is not None else username)
+    else:
+        return ("FAILED", None)
+
+
 # Load environment variables from .env if present
 load_dotenv()
 
@@ -190,16 +231,28 @@ def login():
         data = request.json
         username = data.get('username')
         password = data.get('password')
+        login_type = data.get('login_type', 'ad') # 'ad' or 'local'
 
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT * FROM users WHERE username = ? AND auth_type = ?", (username, login_type))
         user = cursor.fetchone()
 
-        if user and password and check_password_hash(user['password_hash'], password):
-            token = generate_token(user['id'], user['username'], user['role'])
-            return jsonify({'token': token, 'role': user['role'], 'username': user['username']})
+        if not user or not password:
+            return jsonify({'message': 'Invalid credentials'}), 401
 
-        return jsonify({'message': 'Invalid credentials'}), 401
+        if login_type == 'ad':
+            loginFlg, ADName = check_ad_login(username, password)
+            if loginFlg == 'SUCCESS':
+                token = generate_token(user['id'], user['username'], user['role'])
+                return jsonify({'token': token, 'role': user['role'], 'username': user['username'], 'display_name': ADName})
+            else:
+                return jsonify({'message': 'Active Directory Authentication Failed'}), 401
+        else:
+            if check_password_hash(user['password_hash'], password):
+                token = generate_token(user['id'], user['username'], user['role'])
+                return jsonify({'token': token, 'role': user['role'], 'username': user['username']})
+            else:
+                return jsonify({'message': 'Invalid credentials'}), 401
     finally:
         conn.close()
 
@@ -211,7 +264,7 @@ def get_users():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, role FROM users")
+        cursor.execute("SELECT id, username, role, auth_type FROM users")
         users = [dict(row) for row in cursor.fetchall()]
         return jsonify(users)
     finally:
@@ -226,17 +279,20 @@ def create_user():
         username = data.get('username')
         password = data.get('password')
         role = data.get('role', 'author')
+        auth_type = data.get('auth_type', 'ad')
 
         if role not in ['admin', 'moderator', 'author']:
             return jsonify({'message': 'Invalid role. Must be admin, moderator, or author'}), 400
+        if auth_type not in ['ad', 'local']:
+            return jsonify({'message': 'Invalid auth type'}), 400
 
         if not username or not password:
             return jsonify({'message': 'Username and password required'}), 400
 
         cursor = conn.cursor()
         try:
-            cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                           (username, generate_password_hash(password), role))
+            cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
+                           (username, generate_password_hash(password), role, auth_type))
             conn.commit()
             return jsonify({'message': 'User created successfully', 'id': cursor.lastrowid}), 201
         except sqlite3.IntegrityError:

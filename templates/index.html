@@ -447,6 +447,12 @@
                                             <option value="admin">Admin</option>
                                         </select>
                                     </div>
+                                    <div class="form-group form-group-third">
+                                        <select id="ap-create-user-auth" class="form-input form-select">
+                                            <option value="ad">Active Directory (AD)</option>
+                                            <option value="local">Local Database</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <button type="submit" class="btn btn-primary btn-sm">Create User</button>
                             </form>
@@ -609,6 +615,13 @@
                 <div class="form-group">
                     <label for="login-password" class="form-label">Password</label>
                     <input type="password" id="login-password" class="form-input" placeholder="Enter password" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label for="login-type" class="form-label">Authentication Type</label>
+                    <select id="login-type" class="form-input form-select">
+                        <option value="ad" selected>Active Directory (AD)</option>
+                        <option value="local">Local Database</option>
+                    </select>
                 </div>
                 <div id="login-error" class="form-error" style="display:none;"></div>
                 <button type="submit" class="btn btn-primary btn-full">Sign In</button>
@@ -915,6 +928,6 @@
     <div id="toast-container" class="toast-container"></div>
 
 
-    <script src="static/app.js?v=23"></script>
+    <script src="static/app.js?v=42"></script>
 </body>
 </html>

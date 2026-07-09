@@ -28,9 +28,11 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
+            username TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'author'
+            role TEXT DEFAULT 'author',
+            auth_type TEXT DEFAULT 'ad',
+            UNIQUE(username, auth_type)
         )
     ''')
 
