@@ -634,7 +634,7 @@
             const box = document.createElement('div');
             box.className = 'lightbox';
             if (/\.pdf(\?.*)?$/i.test(src)) {
-                box.innerHTML = `<iframe src="${esc(src)}" style="width:80%; height:85vh; border:none; background:white; border-radius:var(--radius-md); box-shadow:0 4px 12px rgba(0,0,0,0.5);"></iframe>`;
+                box.innerHTML = `<object data="${esc(src)}" type="application/pdf" style="width:80%; height:85vh; border:none; background:white; border-radius:var(--radius-md); box-shadow:0 4px 12px rgba(0,0,0,0.5);"><p>Your browser does not support PDFs. <a href="${esc(src)}">Download the PDF</a>.</p></object>`;
                 // Add a small close button specifically for PDF
                 const closeBtn = document.createElement('button');
                 closeBtn.innerHTML = '×';
