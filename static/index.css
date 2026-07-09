@@ -97,6 +97,7 @@
     --danger-bg: rgba(239, 68, 68, 0.15);
     --success: #10b981;
     --success-bg: rgba(16, 185, 129, 0.15);
+    --warning-bg: rgba(245, 158, 11, 0.15);
     --code-bg: #141414;
     --code-text: #34d399;
     --code-highlight: rgba(99, 102, 241, 0.15);
@@ -199,7 +200,7 @@ body {
     background: transparent;
 }
 .sidebar-inner::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--text-tertiary);
     border-radius: var(--radius-full);
 }
 
@@ -209,7 +210,7 @@ body {
     align-items: center;
     gap: 10px;
     padding: 20px 20px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
 .sidebar-brand-icon {
@@ -321,7 +322,7 @@ body {
 
 /* ─── Stats ──────────────────────────────────────────── */
 .sidebar-stats {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
 .stats-grid {
@@ -356,7 +357,7 @@ body {
 
 /* ─── Category List ──────────────────────────────────── */
 .sidebar-categories {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
 .category-list {
@@ -381,6 +382,7 @@ body {
 .category-item:hover {
     background: var(--sidebar-hover);
     color: var(--sidebar-text);
+    border-left-color: rgba(99, 102, 241, 0.4);
 }
 
 .category-item.active {
@@ -426,8 +428,8 @@ body {
     display: inline-flex;
     align-items: center;
     padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--tag-bg);
+    border: 1px solid var(--tag-border);
     border-radius: var(--radius-full);
     font-size: 0.75rem;
     color: var(--sidebar-text-muted);
@@ -437,9 +439,9 @@ body {
 }
 
 .tag-pill-sidebar:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--sidebar-text);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .tag-pill-sidebar.active {
@@ -458,7 +460,7 @@ body {
 .sidebar-footer {
     margin-top: auto;
     padding: 12px 16px 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--sidebar-border);
 }
 
 .theme-toggle-btn {
@@ -736,6 +738,16 @@ body {
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
+.btn-success {
+    background: var(--success);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+.btn-success:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
 .btn-icon {
     padding: 6px;
     border-radius: var(--radius-sm);
@@ -802,8 +814,7 @@ body {
 .notes-container.view-list {
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    gap: 8px;
+    gap: 10px;
 }
 
 .notes-container.view-list .note-item {
@@ -903,6 +914,13 @@ body {
 
 .note-item:hover .note-actions {
     opacity: 1;
+}
+
+/* Always visible on touch devices */
+@media (hover: none) {
+    .note-actions {
+        opacity: 1;
+    }
 }
 
 /* ─── Type Badge ────────────────────────────────────── */
@@ -1050,9 +1068,9 @@ body {
     background: rgba(99, 102, 241, 0.15);
     border: 1px solid rgba(99, 102, 241, 0.25);
     border-radius: var(--radius-sm);
-    color: #a5b4fc;
+    color: var(--accent);
     cursor: pointer;
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 600;
     font-family: var(--font-sans);
     display: flex;
@@ -1707,7 +1725,7 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
     gap: 12px;
-    padding: 20px 24px 0;
+    padding: 20px 24px 16px;
 }
 
 .category-card {
@@ -2124,7 +2142,7 @@ body {
     color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 3px;
-    text-decoration-color: var(--accent-b);
+    text-decoration-color: var(--accent);
 }
 
 /* Markdown Body Overrides */
@@ -2151,7 +2169,7 @@ body {
     padding: 0.2em 0.4em;
     margin: 0;
     font-size: 85%;
-    background-color: var(--card-bg-hover);
+    background-color: var(--code-bg);
     border-radius: 6px;
     font-family: 'Fira Code', monospace;
 }
@@ -2160,7 +2178,7 @@ body {
     overflow: auto;
     font-size: 85%;
     line-height: 1.45;
-    background-color: var(--card-bg-hover);
+    background-color: var(--code-bg);
     border-radius: 6px;
     font-family: 'Fira Code', monospace;
 }
@@ -2169,48 +2187,7 @@ body {
     padding: 0;
 }
 
-/* EasyMDE Dark Mode Overrides */
-[data-theme="dark"] .EasyMDEContainer .editor-toolbar {
-    background-color: var(--card-bg);
-    border-color: var(--border-color);
-    color: var(--text-muted);
-}
-[data-theme="dark"] .EasyMDEContainer .editor-toolbar button {
-    color: var(--text-muted);
-}
-[data-theme="dark"] .EasyMDEContainer .editor-toolbar button:hover,
-[data-theme="dark"] .EasyMDEContainer .editor-toolbar button.active {
-    background-color: var(--card-bg-hover);
-    color: var(--text-color);
-    border-color: var(--border-color);
-}
-[data-theme="dark"] .EasyMDEContainer .editor-toolbar i.separator {
-    border-left-color: var(--border-color);
-    border-right-color: transparent;
-}
-[data-theme="dark"] .EasyMDEContainer .CodeMirror {
-    background-color: var(--input-bg);
-    color: var(--text-color);
-    border-color: var(--border-color);
-}
-[data-theme="dark"] .EasyMDEContainer .CodeMirror-cursor {
-    border-left-color: var(--text-color);
-}
-[data-theme="dark"] .EasyMDEContainer .editor-preview {
-    background-color: var(--card-bg);
-    color: var(--text-color);
-}
-[data-theme="dark"] .EasyMDEContainer .editor-statusbar {
-    color: var(--text-muted);
-}
-[data-theme="dark"] .EasyMDEContainer .CodeMirror-selected {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-[data-theme="dark"] .EasyMDEContainer .CodeMirror-line::selection,
-[data-theme="dark"] .EasyMDEContainer .CodeMirror-line>span::selection,
-[data-theme="dark"] .EasyMDEContainer .CodeMirror-line>span>span::selection {
-    background-color: rgba(255, 255, 255, 0.1);
-}
+/* EasyMDE styles removed — app uses Quill editor */
 
 /* Quill Dark Mode Overrides */
 /* The user requested the editor to ALWAYS be light themed to avoid dark mode icon issues. */
