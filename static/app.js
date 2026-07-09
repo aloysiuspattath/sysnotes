@@ -1650,6 +1650,25 @@
         // Admin forms
         document.getElementById('ap-create-category-form').addEventListener('submit', handleCreateCategory);
         document.getElementById('ap-create-user-form').addEventListener('submit', handleCreateUser);
+        
+        const authSelect = document.getElementById('ap-create-user-auth');
+        if (authSelect) {
+            authSelect.addEventListener('change', (e) => {
+                const pwdInput = document.getElementById('ap-create-user-password');
+                if (e.target.value === 'ad') {
+                    pwdInput.required = false;
+                    pwdInput.disabled = true;
+                    pwdInput.value = '';
+                    pwdInput.placeholder = 'AD Password handled externally';
+                } else {
+                    pwdInput.required = true;
+                    pwdInput.disabled = false;
+                    pwdInput.placeholder = 'Password';
+                }
+            });
+            // Trigger change initially to set correct state
+            authSelect.dispatchEvent(new Event('change'));
+        }
         document.getElementById('ap-settings-form').addEventListener('submit', handleSaveSettings);
         document.getElementById('ap-backup-download-btn').addEventListener('click', handleBackupDownload);
         document.getElementById('ap-restore-form').addEventListener('submit', handleRestore);

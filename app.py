@@ -286,13 +286,19 @@ def create_user():
         if auth_type not in ['ad', 'local']:
             return jsonify({'message': 'Invalid auth type'}), 400
 
-        if not username or not password:
-            return jsonify({'message': 'Username and password required'}), 400
+        if auth_type == 'ad':
+            if not username:
+                return jsonify({'message': 'Username required'}), 400
+            pwd_hash = generate_password_hash(secrets.token_urlsafe(32))
+        else:
+            if not username or not password:
+                return jsonify({'message': 'Username and password required for local users'}), 400
+            pwd_hash = generate_password_hash(password)
 
         cursor = conn.cursor()
         try:
             cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
-                           (username, generate_password_hash(password), role, auth_type))
+                           (username, pwd_hash, role, auth_type))
             conn.commit()
             return jsonify({'message': 'User created successfully', 'id': cursor.lastrowid}), 201
         except sqlite3.IntegrityError:
