@@ -970,23 +970,15 @@ h1, h2, h3, h4, h5, h6 {
 .note-type-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 5px;
     padding: 3px 9px;
     border-radius: var(--radius-full);
-    font-size: 0.62rem;
+    font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.7px;
     margin-bottom: 6px;
-}
-
-.note-type-badge::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
 }
 
 .note-type-badge.type-command {
@@ -995,20 +987,10 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
-.note-type-badge.type-command::before {
-    background: var(--accent);
-    box-shadow: 0 0 6px var(--accent);
-}
-
 .note-type-badge.type-procedure {
     background: rgba(16, 185, 129, 0.1);
     color: #10b981;
     border: 1px solid rgba(16, 185, 129, 0.25);
-}
-
-.note-type-badge.type-procedure::before {
-    background: #10b981;
-    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 }
 
 /* ─── Step count chip (card summary) ──────────────────── */
@@ -1074,29 +1056,40 @@ h1, h2, h3, h4, h5, h6 {
 /* ─── Command Block (highlighted) ────────────────────── */
 .note-command-wrapper {
     position: relative;
+    margin-top: 4px;
 }
 
 .note-code-block {
     position: relative;
-    border-left: 3px solid var(--accent);
     border-radius: var(--radius-md);
-    background: var(--code-bg);
-    box-shadow: 0 2px 12px var(--note-cmd-glow), inset 0 0 0 1px rgba(255,255,255,0.04);
+    background: #1e1e1e; /* Terminal Dark */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     overflow: hidden;
-    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.note-code-block::before {
+    content: '';
+    display: block;
+    height: 12px;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="54" height="12" viewBox="0 0 54 12"><circle cx="6" cy="6" r="6" fill="%23ff5f56"/><circle cx="26" cy="6" r="6" fill="%23ffbd2e"/><circle cx="46" cy="6" r="6" fill="%2327c93f"/></svg>') no-repeat 14px center;
+    background-color: #2d2d2d;
+    padding: 12px 0;
+    border-bottom: 1px solid #111;
 }
 
 .note-code-block:hover {
-    box-shadow: 0 4px 20px var(--note-cmd-glow), 0 0 0 1px var(--note-cmd-border), inset 0 0 0 1px rgba(255,255,255,0.06);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
 .note-code {
     margin: 0;
-    padding: 11px 52px 11px 14px;
+    padding: 14px 52px 14px 14px;
     background: transparent;
-    color: var(--code-text);
+    color: #a6e22e; /* Terminal Green/Yellow */
     font-family: var(--font-mono);
-    font-size: 0.81rem;
+    font-size: 0.85rem;
     line-height: 1.6;
     overflow-x: auto;
     white-space: pre-wrap;
@@ -1105,8 +1098,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .note-copy-btn {
     position: absolute;
-    top: 7px;
-    right: 7px;
+    top: 40px;
+    right: 10px;
     padding: 4px 9px;
     background: rgba(99, 102, 241, 0.15);
     border: 1px solid rgba(99, 102, 241, 0.25);
@@ -1156,7 +1149,8 @@ h1, h2, h3, h4, h5, h6 {
 .note-category-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    justify-content: center;
+    gap: 4px;
     padding: 2px 7px;
     background: var(--accent-subtle);
     color: var(--accent);
@@ -1185,7 +1179,9 @@ h1, h2, h3, h4, h5, h6 {
 .note-tag-pill {
     display: inline-flex;
     align-items: center;
-    padding: 1px 7px;
+    justify-content: center;
+    gap: 4px;
+    padding: 2px 8px;
     background: var(--tag-bg);
     border: 1px solid var(--tag-border);
     border-radius: var(--radius-full);
@@ -1202,7 +1198,8 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-tertiary);
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    justify-content: center;
+    gap: 4px;
     margin-left: auto;
     transition: color var(--transition-slow), opacity var(--transition-base);
 }
