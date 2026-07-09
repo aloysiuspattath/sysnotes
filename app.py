@@ -95,7 +95,10 @@ def serve_upload(filename):
         mimetype = 'text/csv'
     
     if mimetype:
-        return send_from_directory(UPLOADS_DIR, filename, mimetype=mimetype)
+        resp = send_from_directory(UPLOADS_DIR, filename, mimetype=mimetype)
+        if ext == 'pdf':
+            resp.headers['Content-Disposition'] = f'inline; filename="{filename}"'
+        return resp
     return send_from_directory(UPLOADS_DIR, filename)
 
 # Note detail page
