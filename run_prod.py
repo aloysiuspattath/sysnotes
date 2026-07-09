@@ -1,5 +1,6 @@
 from app import app
-from waitress import serve
+from cheroot.wsgi import Server as WSGIServer
+from cheroot.ssl.builtin import BuiltinSSLAdapter
 import sys
 import logging
 import os
@@ -9,11 +10,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 if __name__ == "__main__":
-    host = os.getenv('HOST', '127.0.0.1')
+    host = os.getenv('HOST', '0.0.0.0')
     try:
-        port = int(os.getenv('PORT', '5006'))
+        port = int(os.getenv('PORT', '5005'))
     except ValueError:
-        port = 5006
+        port = 5005
     # Configure dual logging to console and file
     log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     log_file_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'sysnotes.log')
@@ -36,15 +37,27 @@ if __name__ == "__main__":
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
     
-    logger = logging.getLogger('waitress')
+    logger = logging.getLogger('cheroot')
+    
+    cert_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cert.pem')
+    key_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'key.pem')
+
+    server = WSGIServer((host, port), app, numthreads=10)
+    
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        server.ssl_adapter = BuiltinSSLAdapter(cert_path, key_path)
+        scheme = "https"
+    else:
+        scheme = "http"
+        logger.warning("SSL Certificates not found! Running in HTTP mode.")
     
     logger.info("===================================================")
-    logger.info("  Starting SysNotes Production Server")
-    logger.info(f"  Listening on: http://{host}:{port}")
+    logger.info("  Starting SysNotes Production Server (Cheroot)")
+    logger.info(f"  Listening on: {scheme}://{host}:{port}")
     logger.info("===================================================")
     
     try:
-        serve(app, host=host, port=port, threads=4)
+        server.start()
     except BaseException as e:
         logger.error(f"Failed to start server: {e}")
         sys.exit(1)
