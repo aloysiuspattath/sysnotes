@@ -1779,8 +1779,6 @@
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
-})();
-
     // --- Audit Logs ---
     async function loadAdminAudit() {
         const res = await apiFetch('api/audit', { headers: authHeaders() });
@@ -1810,3 +1808,5 @@
         });
         tbody.innerHTML = html;
     }
+
+})();
