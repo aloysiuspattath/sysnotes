@@ -1702,6 +1702,26 @@
         });
     });
 
+    // Auto-refresh polling
+    let lastUpdateTimestamp = "";
+    setInterval(async () => {
+        try {
+            const res = await fetch('api/last_updated');
+            if (res.ok) {
+                const data = await res.json();
+                if (lastUpdateTimestamp && data.last_update && data.last_update !== lastUpdateTimestamp) {
+                    // Only refresh if no modals are open to prevent input loss
+                    const anyModalOpen = Array.from(document.querySelectorAll('.modal-overlay')).some(m => m.style.display !== 'none');
+                    if (!anyModalOpen) {
+                        fetchNotes();
+                        updatePendingCount();
+                    }
+                }
+                lastUpdateTimestamp = data.last_update;
+            }
+        } catch (e) {}
+    }, 10000);
+
     // Ensure pending review modal exists (in case index.html is cached)
     if (!document.getElementById('pending-review-modal')) {
         const modalHtml = `

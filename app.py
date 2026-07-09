@@ -504,6 +504,17 @@ def _save_steps(cursor, note_id, steps):
             (note_id, i, step.get('title', ''), step.get('command', ''), step.get('description', ''))
         )
 
+@app.route('/api/last_updated', methods=['GET'])
+def get_last_updated():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(updated_at) as last_update FROM notes")
+        row = cursor.fetchone()
+        last_update = row['last_update'] if row and row['last_update'] else ""
+        return jsonify({"last_update": last_update})
+    finally:
+        close_db(conn)
 @app.route('/api/notes', methods=['GET'])
 def get_notes():
     conn = get_db()
