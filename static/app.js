@@ -921,14 +921,10 @@
             container.querySelectorAll('.note-delete-btn').forEach(btn => btn.addEventListener('click', () => deleteNote(btn.dataset.id)));
         }
 
-        // Image lightbox
+        // Image and Document lightbox
         container.querySelectorAll('.procedure-step-image, .note-inline-image').forEach(el => {
             el.addEventListener('click', () => {
-                if (isDocumentUrl(el.dataset.src)) {
-                    window.open(el.dataset.src, '_blank');
-                } else {
-                    openLightbox(el.dataset.src);
-                }
+                openLightbox(el.dataset.src);
             });
         });
     }
