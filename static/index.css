@@ -1163,7 +1163,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Tags + author: hidden by default, fade in on card hover */
-.note-tags-row,
+.note-tags-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
 .note-meta-user,
 .note-meta-steps {
     opacity: 0;
