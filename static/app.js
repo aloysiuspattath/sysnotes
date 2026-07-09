@@ -1002,13 +1002,14 @@
         e.preventDefault();
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
+        const loginType = document.getElementById('login-type').value;
         const errorEl = document.getElementById('login-error');
         errorEl.style.display = 'none';
 
         const res = await apiFetch('api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ username, password, login_type: loginType })
         });
         if (!res) { errorEl.textContent = 'Network error'; errorEl.style.display = 'block'; return; }
         const data = await res.json();

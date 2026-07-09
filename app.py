@@ -235,6 +235,8 @@ def login():
         data = request.json
         username = data.get('username')
         password = data.get('password')
+        requested_login_type = data.get('login_type')
+        
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
@@ -243,6 +245,10 @@ def login():
             return jsonify({'message': 'Invalid credentials'}), 401
 
         login_type = user['auth_type']
+        
+        # Enforce that the user selected the correct authentication type from the dropdown
+        if requested_login_type and requested_login_type != login_type:
+            return jsonify({'message': f'Invalid login type. This user must login using {login_type.upper()}'}), 401
 
         if login_type == 'ad':
             loginFlg, ADName = check_ad_login(username, password)
