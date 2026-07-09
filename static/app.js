@@ -1333,21 +1333,54 @@
         
         tbody.querySelectorAll('.user-reset-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
-                const newPassword = prompt(`Enter new password for ${btn.dataset.username}:`);
-                if (newPassword === null) return;
-                if (!newPassword.trim()) { alert("Password cannot be empty"); return; }
-                
-                const res = await apiFetch(`api/users/${btn.dataset.userId}/reset-password`, {
-                    method: 'POST',
-                    headers: authHeaders(),
-                    body: JSON.stringify({ password: newPassword.trim() })
+                const username = btn.dataset.username;
+                const userId = btn.dataset.userId;
+                // Create a temporary password modal
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.style.display = 'flex';
+                overlay.innerHTML = `
+                    <div class="modal" style="max-width:400px;">
+                        <div class="modal-header">
+                            <h2>Reset Password</h2>
+                            <button class="modal-close-btn" id="reset-pw-close">&times;</button>
+                        </div>
+                        <div class="modal-body" style="padding:20px;">
+                            <p style="margin-bottom:12px;">Enter new password for <strong>${escapeHTML(username)}</strong>:</p>
+                            <input type="password" id="reset-pw-input" class="form-input" placeholder="New password (min 8 chars, 1 uppercase, 1 number)" style="width:100%;">
+                            <p id="reset-pw-error" style="color:var(--danger); display:none; margin-top:8px; font-size:0.85rem;"></p>
+                        </div>
+                        <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; padding:15px; border-top:1px solid var(--border-color);">
+                            <button class="btn btn-ghost" id="reset-pw-cancel">Cancel</button>
+                            <button class="btn btn-primary" id="reset-pw-submit">Reset</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(overlay);
+
+                overlay.querySelector('#reset-pw-close').onclick = () => overlay.remove();
+                overlay.querySelector('#reset-pw-cancel').onclick = () => overlay.remove();
+                overlay.querySelector('#reset-pw-submit').onclick = async () => {
+                    const newPassword = overlay.querySelector('#reset-pw-input').value;
+                    const errEl = overlay.querySelector('#reset-pw-error');
+                    if (!newPassword.trim()) { errEl.textContent = 'Password cannot be empty'; errEl.style.display = 'block'; return; }
+                    const res = await apiFetch(`api/users/${userId}/reset-password`, {
+                        method: 'POST',
+                        headers: authHeaders(),
+                        body: JSON.stringify({ password: newPassword.trim() })
+                    });
+                    if (res && res.ok) {
+                        showToast('Password reset successfully!');
+                        overlay.remove();
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        errEl.textContent = err.message || 'Failed to reset password';
+                        errEl.style.display = 'block';
+                    }
+                };
+                overlay.querySelector('#reset-pw-input').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') overlay.querySelector('#reset-pw-submit').click();
                 });
-                if (res && res.ok) {
-                    showToast('Password reset successfully!');
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    showToast(err.message || 'Failed to reset password', true);
-                }
+                overlay.querySelector('#reset-pw-input').focus();
             });
         });
 

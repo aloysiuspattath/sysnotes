@@ -24,7 +24,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 def check_ad_login(username, password):
-    url = "https://10.250.7.210/sso/adloginwithRoles.asmx"
+    url = os.environ.get('AD_SERVER_URL', 'https://10.250.7.210/sso/adloginwithRoles.asmx')
     username = html.escape(username)
     password = html.escape(password)
 
@@ -77,6 +77,22 @@ def get_secret_key():
 
 app.config['SECRET_KEY'] = get_secret_key()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max upload
+
+# Password complexity validation
+def validate_password(password):
+    """Enforce minimum password complexity requirements."""
+    if len(password) < 8:
+        return False, 'Password must be at least 8 characters long'
+    if not any(c.isdigit() for c in password):
+        return False, 'Password must contain at least one number'
+    if not any(c.isupper() for c in password):
+        return False, 'Password must contain at least one uppercase letter'
+    return True, ''
+
+# Login rate limiting constants
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+_login_attempts = {}  # {username: {'count': N, 'locked_until': datetime}}
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx'}
 
@@ -236,33 +252,61 @@ def login():
         username = data.get('username')
         password = data.get('password')
         requested_login_type = data.get('login_type')
-        
+
+        if not username or not password:
+            return jsonify({'message': 'Invalid credentials'}), 401
+
+        # Rate limiting: check if account is locked
+        import datetime as _dt
+        now = _dt.datetime.utcnow()
+        attempt_info = _login_attempts.get(username)
+        if attempt_info and attempt_info.get('locked_until') and now < attempt_info['locked_until']:
+            remaining = int((attempt_info['locked_until'] - now).total_seconds() // 60) + 1
+            return jsonify({'message': f'Account temporarily locked. Try again in {remaining} minute(s)'}), 429
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
 
-        if not user or not password:
+        if not user:
             return jsonify({'message': 'Invalid credentials'}), 401
 
         login_type = user['auth_type']
-        
-        # Enforce that the user selected the correct authentication type from the dropdown
+
+        # Enforce that the user selected the correct authentication type
         if requested_login_type and requested_login_type != login_type:
-            return jsonify({'message': f'Invalid login type. This user must login using {login_type.upper()}'}), 401
+            return jsonify({'message': 'Invalid credentials'}), 401
+
+        auth_success = False
+        display_name = None
 
         if login_type == 'ad':
             loginFlg, ADName = check_ad_login(username, password)
             if loginFlg == 'SUCCESS':
-                token = generate_token(user['id'], user['username'], user['role'])
-                return jsonify({'token': token, 'role': user['role'], 'username': user['username'], 'display_name': ADName})
-            else:
-                return jsonify({'message': 'Active Directory Authentication Failed'}), 401
+                auth_success = True
+                display_name = ADName
         else:
             if check_password_hash(user['password_hash'], password):
-                token = generate_token(user['id'], user['username'], user['role'])
-                return jsonify({'token': token, 'role': user['role'], 'username': user['username']})
-            else:
-                return jsonify({'message': 'Invalid credentials'}), 401
+                auth_success = True
+
+        if auth_success:
+            # Clear login attempts on success
+            _login_attempts.pop(username, None)
+            token = generate_token(user['id'], user['username'], user['role'])
+            resp = {'token': token, 'role': user['role'], 'username': user['username']}
+            if display_name:
+                resp['display_name'] = display_name
+            return jsonify(resp)
+        else:
+            # Track failed attempts
+            if username not in _login_attempts:
+                _login_attempts[username] = {'count': 0, 'locked_until': None}
+            _login_attempts[username]['count'] += 1
+            if _login_attempts[username]['count'] >= MAX_LOGIN_ATTEMPTS:
+                _login_attempts[username]['locked_until'] = now + _dt.timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+                _login_attempts[username]['count'] = 0
+                return jsonify({'message': f'Too many failed attempts. Account locked for {LOCKOUT_DURATION_MINUTES} minutes'}), 429
+            return jsonify({'message': 'Invalid credentials'}), 401
     finally:
         conn.close()
 
@@ -303,6 +347,9 @@ def create_user():
         else:
             if not username or not password:
                 return jsonify({'message': 'Username and password required for local users'}), 400
+            is_valid, msg = validate_password(password)
+            if not is_valid:
+                return jsonify({'message': msg}), 400
             pwd_hash = generate_password_hash(password)
 
         cursor = conn.cursor()
@@ -349,6 +396,10 @@ def change_password():
         if not old_password or not new_password:
             return jsonify({'message': 'Old password and new password required'}), 400
 
+        is_valid, msg = validate_password(new_password)
+        if not is_valid:
+            return jsonify({'message': msg}), 400
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (request.user['sub'],))
         user = cursor.fetchone()
@@ -366,6 +417,7 @@ def change_password():
 # ================= SETTINGS ================= #
 
 @app.route('/api/settings', methods=['GET'])
+@login_required
 def get_settings():
     conn = get_db()
     try:
@@ -979,6 +1031,10 @@ def admin_reset_password(user_id):
         new_password = data.get('password')
         if not new_password or not new_password.strip():
             return jsonify({'message': 'Password cannot be empty'}), 400
+
+        is_valid, msg = validate_password(new_password)
+        if not is_valid:
+            return jsonify({'message': msg}), 400
             
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
@@ -1000,10 +1056,21 @@ def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'"
+    )
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
     return response
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, debug=True)
+    app.run(host='0.0.0.0', port=5005, debug=False)
 
 # ================= AUDIT LOGS ================= #
 
@@ -1027,6 +1094,7 @@ def get_global_audit():
         conn.close()
 
 @app.route('/api/notes/<int:note_id>/audit', methods=['GET'])
+@login_required
 def get_note_audit(note_id):
     conn = get_db()
     try:
