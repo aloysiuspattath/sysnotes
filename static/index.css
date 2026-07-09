@@ -920,6 +920,14 @@ h1, h2, h3, h4, h5, h6 {
     mask-image: linear-gradient(180deg, #000 85%, transparent);
 }
 
+/* Ensure review modal shows full height */
+.notes-container.review-full-note .markdown-body {
+    max-height: none;
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
 /* ─── Note Inner Elements ────────────────────────────── */
 .note-header {
     display: flex;

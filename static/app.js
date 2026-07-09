@@ -1404,7 +1404,7 @@
             btn.addEventListener('click', () => {
                 const note = JSON.parse(btn.dataset.note);
                 const modalBody = document.getElementById('pending-review-modal-body');
-                modalBody.innerHTML = buildNoteCardHtml(note, true, 0);
+                modalBody.innerHTML = `<div class="notes-container view-stack review-full-note" style="gap:0; padding:10px;">${buildNoteCardHtml(note, true, 0)}</div>`;
                 attachNoteCardEventListeners(modalBody, true);
                 
                 document.getElementById('pending-review-approve-btn').onclick = async () => {
