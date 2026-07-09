@@ -235,14 +235,14 @@ def login():
         data = request.json
         username = data.get('username')
         password = data.get('password')
-        login_type = data.get('login_type', 'ad') # 'ad' or 'local'
-
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = ? AND auth_type = ?", (username, login_type))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
 
         if not user or not password:
             return jsonify({'message': 'Invalid credentials'}), 401
+
+        login_type = user['auth_type']
 
         if login_type == 'ad':
             loginFlg, ADName = check_ad_login(username, password)
