@@ -1802,7 +1802,7 @@
                 <td style="font-size:0.85rem; color:var(--text-secondary);">${dateStr}</td>
                 <td style="font-weight:600;">${escapeHTML(l.username || 'System')}</td>
                 <td><span style="color:${actionColor};font-weight:bold;font-size:0.8rem;">${escapeHTML(l.action)}</span></td>
-                <td>${l.note_id || '-'}</td>
+                <td>${l.note_id ? `<a href="/note/${l.note_id}" target="_blank" style="color:var(--accent); text-decoration:none; font-weight:600;">#${l.note_id}</a>` : '-'}</td>
                 <td style="font-size:0.9rem; color:var(--text-secondary);">${escapeHTML(l.details || '')}</td>
             </tr>`;
         });
