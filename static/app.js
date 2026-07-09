@@ -239,22 +239,26 @@
         const optUsers = document.getElementById('opt-users-tab-btn');
         const optSettings = document.getElementById('opt-settings-tab-btn');
         const optBackup = document.getElementById('opt-backup-tab-btn');
+        const optAudit = document.getElementById('opt-audit-tab-btn');
 
         if (currentRole === 'moderator') {
             if (optCategories) optCategories.style.display = 'none';
             if (optUsers) optUsers.style.display = 'none';
             if (optSettings) optSettings.style.display = 'none';
             if (optBackup) optBackup.style.display = 'none';
+            if (optAudit) optAudit.style.display = 'none';
             loadPendingNotes();
         } else {
             if (optCategories) optCategories.style.display = '';
             if (optUsers) optUsers.style.display = '';
             if (optSettings) optSettings.style.display = '';
             if (optBackup) optBackup.style.display = '';
+            if (optAudit) optAudit.style.display = '';
             loadPendingNotes();
             loadAdminCategories();
             loadAdminUsers();
             loadAdminSettings();
+            loadAdminAudit();
         }
         
         switchAdminTab('ap-pending-tab');
