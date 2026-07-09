@@ -1693,16 +1693,7 @@
 
         // Modal close
         document.querySelectorAll('.modal-close-btn').forEach(btn => btn.addEventListener('click', () => closeModal(btn.dataset.modal)));
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => { 
-                if (e.target === overlay) {
-                    if (overlay.id === 'add-note-modal' || overlay.id === 'edit-note-modal') {
-                        return; // Prevent closing when clicking outside for these modals
-                    }
-                    overlay.style.display = 'none'; 
-                }
-            });
-        });
+
 
         // Sidebar mobile
         document.getElementById('hamburger-btn').addEventListener('click', () => {
