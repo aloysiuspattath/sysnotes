@@ -858,7 +858,10 @@
                 const res = await fetch(`/api/notes/${id}/audit`);
                 if (!res.ok) return;
                 const logs = await res.json();
-                if (!logs || logs.length === 0) return;
+                if (!logs || logs.length === 0) {
+                    container.innerHTML = `<div class="steps-title" style="margin-bottom:15px; border-top:1px solid var(--border); padding-top:20px;">History</div><div style="font-size:0.85rem; color:var(--text-secondary);">No history available for this note. (Created before audit logging was enabled).</div>`;
+                    return;
+                }
                 
                 let logHtml = `<div class="steps-title" style="margin-bottom:15px; border-top:1px solid var(--border); padding-top:20px;">History</div>
                 <div style="background:var(--bg-secondary); border-radius:var(--radius-md); border:1px solid var(--border); padding:15px;">
