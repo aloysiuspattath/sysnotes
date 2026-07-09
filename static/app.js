@@ -1300,12 +1300,16 @@
         let html = '';
         users.forEach(u => {
             const isSelf = u.username === currentUsername;
+            const isAD = u.auth_type === 'ad';
             html += `<tr>
                 <td>${escapeHTML(u.username)}${isSelf ? ' <span style="color:var(--accent);font-size:0.75rem;">(you)</span>' : ''}</td>
-                <td><span class="status-badge ${u.role === 'admin' ? 'enabled' : (u.role === 'moderator' ? 'moderator' : 'disabled')}">${escapeHTML(u.role)}</span></td>
+                <td>
+                    <span class="status-badge ${u.role === 'admin' ? 'enabled' : (u.role === 'moderator' ? 'moderator' : 'disabled')}">${escapeHTML(u.role)}</span>
+                    <span class="status-badge" style="background:var(--bg-hover); color:var(--text-secondary); margin-left:4px;">${isAD ? 'AD' : 'Local'}</span>
+                </td>
                 <td>
                     <div style="display:flex; gap:8px; align-items:center;">
-                        ${!isSelf ? `<button class="btn-icon user-reset-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" title="Reset Password" style="color:var(--success);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>` : ''}
+                        ${(!isSelf && !isAD) ? `<button class="btn-icon user-reset-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" title="Reset Password" style="color:var(--success);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>` : ''}
                         ${!isSelf ? `<button class="btn-icon btn-icon-danger user-delete-btn" data-user-id="${u.id}">${ICONS.trash}</button>` : ''}
                     </div>
                 </td>
