@@ -804,6 +804,7 @@
                 html += `</div>`;
             }
 
+            html += `<div id="note-audit-section" style="margin-top:40px;"></div>`;
             const container = document.getElementById('page-content');
             container.innerHTML = html;
 
@@ -844,6 +845,7 @@
                 return r.json();
             })
             .then(renderNote)
+            .then(() => loadNoteAudit(noteId))
             .catch(() => {
                 document.getElementById('page-content').innerHTML =
                     `<div class="spinner-wrap"><p style="color:var(--text-2)">Note not found or an error occurred. <a href="/" style="color:var(--accent)">Go back</a></p></div>`;

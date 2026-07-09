@@ -270,7 +270,16 @@
 
     function switchAdminTab(tabId) {
         document.querySelectorAll('.admin-page-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
-        document.querySelectorAll('.admin-page-tab-content').forEach(c => c.classList.toggle('active', c.id === tabId));
+        document.querySelectorAll('.admin-page-tab-content').forEach(c => {
+            c.classList.toggle('active', c.id === tabId);
+            c.style.display = (c.id === tabId) ? 'block' : 'none';
+        });
+
+        if (tabId === 'ap-pending-tab') loadAdminPending();
+        if (tabId === 'ap-categories-tab') loadAdminCategories();
+        if (tabId === 'ap-users-tab') loadAdminUsers();
+        if (tabId === 'ap-settings-tab') loadAdminSettings();
+        if (tabId === 'ap-audit-tab') loadAdminAudit();
     }
 
     // ─── NOTE TYPE TOGGLE ────────────────────────────────
