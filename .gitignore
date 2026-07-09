@@ -32,3 +32,6 @@ venv/
 
 # Server runtime logs
 *.log
+
+# SSL certificates
+*.pem
