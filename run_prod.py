@@ -45,6 +45,6 @@ if __name__ == "__main__":
     
     try:
         serve(app, host=host, port=port, threads=4)
-    except Exception as e:
+    except BaseException as e:
         logger.error(f"Failed to start server: {e}")
         sys.exit(1)

@@ -14,13 +14,13 @@
 /* ─── CSS CUSTOM PROPERTIES ──────────────────────────── */
 :root {
     /* Light Theme - Clean Dashboard (Nexus/Scribo Inspired) */
-    --bg-primary: #f3f4f6;
-    --bg-secondary: #ffffff;
-    --bg-sidebar: #ffffff;
+    --bg-primary: #f8fafc;
+    --bg-secondary: rgba(255, 255, 255, 0.75);
+    --bg-sidebar: rgba(255, 255, 255, 0.85);
     --sidebar-text: #374151;
     --sidebar-text-muted: #9ca3af;
-    --sidebar-hover: #f3f4f6;
-    --sidebar-active: #eef2ff;
+    --sidebar-hover: rgba(243, 244, 246, 0.6);
+    --sidebar-active: rgba(238, 242, 255, 0.8);
     --sidebar-border: #e5e7eb;
     --text-primary: #111827;
     --text-secondary: #4b5563;
@@ -66,7 +66,8 @@
     --radius-full: 9999px;
 
     /* Typography */
-    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     --font-mono: 'SF Mono', 'SF Pro Icons', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
 
     /* Transitions */
@@ -77,9 +78,9 @@
 
 /* ─── DARK THEME ─────────────────────────────────────── */
 [data-theme="dark"] {
-    --bg-primary: #101010;
-    --bg-secondary: #1a1a1a;
-    --bg-sidebar: #0a0a0a;
+    --bg-primary: #0a0a0b;
+    --bg-secondary: rgba(26, 26, 26, 0.65);
+    --bg-sidebar: rgba(10, 10, 10, 0.85);
     --sidebar-hover: rgba(255, 255, 255, 0.05);
     --sidebar-active: rgba(99, 102, 241, 0.15);
     --sidebar-border: rgba(255, 255, 255, 0.08);
@@ -119,6 +120,24 @@
     --note-cmd-glow: rgba(99, 102, 241, 0.15);
 }
 
+/* ─── ANIMATIONS ─────────────────────────────────────── */
+@keyframes meshGradient {
+    0% { background-position: 0% 0%; }
+    50% { background-position: 100% 100%; }
+    100% { background-position: 0% 0%; }
+}
+
+@keyframes revealUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* ─── BASE ───────────────────────────────────────────── */
 html {
     font-size: 16px;
@@ -130,8 +149,11 @@ body {
     font-family: var(--font-sans);
     background-color: var(--bg-primary);
     background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 40%),
-        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 40%);
+        radial-gradient(at 20% 20%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(236, 72, 153, 0.1) 0px, transparent 50%);
+    background-size: 150% 150%;
+    animation: meshGradient 20s ease-in-out infinite;
     background-attachment: fixed;
     color: var(--text-primary);
     line-height: 1.6;
@@ -142,8 +164,14 @@ body {
 
 [data-theme="dark"] body {
     background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 40%),
-        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 40%);
+        radial-gradient(at 20% 20%, rgba(99, 102, 241, 0.18) 0px, transparent 50%),
+        radial-gradient(at 80% 80%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(236, 72, 153, 0.12) 0px, transparent 50%);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 600;
 }
 
 /* ─── CUSTOM SCROLLBAR ───────────────────────────────── */
@@ -786,11 +814,13 @@ body {
 
 .notes-container.view-card .note-item {
     background: var(--bg-secondary);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 24px;
     transition: all var(--transition-base);
-    animation: fadeSlideUp 0.4s ease backwards;
+    animation: revealUp 0.5s ease-out backwards;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -798,9 +828,9 @@ body {
 }
 
 .notes-container.view-card .note-item:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--card-shadow-hover);
-    border-color: var(--note-cmd-border);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 20px var(--accent-glow);
+    border-color: var(--accent);
 }
 
 .notes-container.view-card .markdown-body {
@@ -822,19 +852,22 @@ body {
     align-items: flex-start;
     gap: 16px;
     background: var(--bg-secondary);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-left: 4px solid transparent;
     border-radius: var(--radius-lg);
     padding: 18px 24px;
     transition: all var(--transition-base);
-    animation: fadeSlideUp 0.3s ease backwards;
+    animation: revealUp 0.4s ease-out backwards;
     box-shadow: var(--card-shadow);
 }
 
 .notes-container.view-list .note-item:hover {
     border-left-color: var(--accent);
-    box-shadow: var(--card-shadow-hover);
-    transform: translateX(2px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.1), 0 0 15px var(--accent-glow);
+    transform: translateX(4px);
+    border-color: var(--accent-subtle);
 }
 
 .notes-container.view-list .note-info {
@@ -859,11 +892,13 @@ body {
 
 .notes-container.view-stack .note-item {
     background: var(--bg-secondary);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 32px 36px;
     transition: all var(--transition-base);
-    animation: fadeSlideUp 0.4s ease backwards;
+    animation: revealUp 0.5s ease-out backwards;
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
@@ -871,9 +906,9 @@ body {
 }
 
 .notes-container.view-stack .note-item:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--card-shadow-hover);
-    border-color: var(--note-cmd-border);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 20px var(--accent-glow);
+    border-color: var(--accent);
     z-index: 1;
     position: relative;
 }
