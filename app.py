@@ -1065,8 +1065,12 @@ def add_security_headers(response):
         "img-src 'self' data: blob:; "
         "connect-src 'self'"
     )
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # Only disable caching for API/HTML responses; allow static assets to be cached
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/'):
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+    else:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
 
 if __name__ == '__main__':
