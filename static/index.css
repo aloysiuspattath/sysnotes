@@ -195,9 +195,7 @@ h1, h2, h3, h4, h5, h6 {
    ═══════════════════════════════════════════════════════ */
 .sidebar {
     width: var(--sidebar-width);
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: var(--bg-sidebar, rgba(255, 255, 255, 0.95));
     border-right: 1px solid rgba(255, 255, 255, 0.4);
     height: 100vh;
     position: fixed;
@@ -524,8 +522,7 @@ h1, h2, h3, h4, h5, h6 {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.6);
     z-index: 99;
     opacity: 0;
     transition: opacity var(--transition-base);
@@ -557,8 +554,6 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 24px;
     height: var(--topbar-height);
     background: var(--topbar-bg);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--topbar-border);
     transition: background var(--transition-slow), border-color var(--transition-slow);
 }
@@ -814,12 +809,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .notes-container.view-card .note-item {
     background: var(--bg-secondary);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 24px;
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
     animation: revealUp 0.5s ease-out backwards;
     display: flex;
     flex-direction: column;
@@ -852,13 +845,11 @@ h1, h2, h3, h4, h5, h6 {
     align-items: flex-start;
     gap: 16px;
     background: var(--bg-secondary);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-left: 4px solid transparent;
     border-radius: var(--radius-lg);
     padding: 18px 24px;
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
     animation: revealUp 0.4s ease-out backwards;
     box-shadow: var(--card-shadow);
 }
@@ -892,12 +883,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .notes-container.view-stack .note-item {
     background: var(--bg-secondary);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 32px 36px;
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
     animation: revealUp 0.5s ease-out backwards;
     box-shadow: var(--card-shadow);
     display: flex;
@@ -1254,8 +1243,6 @@ h1, h2, h3, h4, h5, h6 {
     position: fixed;
     inset: 0;
     background: var(--overlay-bg);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     z-index: 200;
     display: flex;
     align-items: center;
