@@ -814,6 +814,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 24px;
     transition: transform var(--transition-base), box-shadow var(--transition-base);
     animation: revealUp 0.5s ease-out backwards;
+    will-change: transform, opacity;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -829,8 +830,18 @@ h1, h2, h3, h4, h5, h6 {
 .notes-container.view-card .markdown-body {
     max-height: 220px;
     overflow: hidden;
-    -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent);
-    mask-image: linear-gradient(180deg, #000 70%, transparent);
+    position: relative;
+}
+
+.notes-container.view-card .markdown-body::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to bottom, transparent, var(--bg-secondary));
+    pointer-events: none;
 }
 
 /* ─── List View ──────────────────────────────────────── */
@@ -850,8 +861,9 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: var(--radius-lg);
     padding: 18px 24px;
     transition: transform var(--transition-base), box-shadow var(--transition-base);
-    animation: revealUp 0.4s ease-out backwards;
+    /* Removed animation for list view to improve performance on large lists */
     box-shadow: var(--card-shadow);
+    will-change: transform, box-shadow;
 }
 
 .notes-container.view-list .note-item:hover {
@@ -888,6 +900,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 32px 36px;
     transition: transform var(--transition-base), box-shadow var(--transition-base);
     animation: revealUp 0.5s ease-out backwards;
+    will-change: transform, opacity;
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
@@ -905,16 +918,28 @@ h1, h2, h3, h4, h5, h6 {
 .notes-container.view-stack .markdown-body {
     max-height: 400px;
     overflow: hidden;
-    -webkit-mask-image: linear-gradient(180deg, #000 85%, transparent);
-    mask-image: linear-gradient(180deg, #000 85%, transparent);
+    position: relative;
+}
+
+.notes-container.view-stack .markdown-body::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(to bottom, transparent, var(--bg-secondary));
+    pointer-events: none;
 }
 
 /* Ensure review modal shows full height */
 .notes-container.review-full-note .markdown-body {
     max-height: none;
     overflow: visible;
-    -webkit-mask-image: none;
-    mask-image: none;
+}
+
+.notes-container.review-full-note .markdown-body::after {
+    display: none;
 }
 
 /* ─── Note Inner Elements ────────────────────────────── */
