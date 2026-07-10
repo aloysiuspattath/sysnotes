@@ -1323,6 +1323,7 @@
                 </td>
                 <td>
                     <div style="display:flex; gap:8px; align-items:center;">
+                        ${(!isSelf && u.role !== 'admin') ? `<button class="btn-icon user-role-btn" data-user-id="${u.id}" data-current-role="${u.role}" title="${u.role === 'author' ? 'Make Moderator' : 'Make Author'}" style="color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>` : ''}
                         ${(!isSelf && !isAD) ? `<button class="btn-icon user-reset-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" title="Reset Password" style="color:var(--success);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>` : ''}
                         ${!isSelf ? `<button class="btn-icon btn-icon-danger user-delete-btn" data-user-id="${u.id}">${ICONS.trash}</button>` : ''}
                     </div>
@@ -1390,6 +1391,20 @@
                 const res = await apiFetch('api/users/' + btn.dataset.userId, { method: 'DELETE', headers: authHeaders() });
                 if (res && res.ok) { showToast('User deleted.'); loadAdminUsers(); }
                 else { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to delete user', true); }
+            });
+        });
+
+        tbody.querySelectorAll('.user-role-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newRole = btn.dataset.currentRole === 'author' ? 'moderator' : 'author';
+                if (!confirm(`Change user role to ${newRole}?`)) return;
+                const res = await apiFetch('api/users/' + btn.dataset.userId + '/role', { 
+                    method: 'PUT', 
+                    headers: authHeaders(),
+                    body: JSON.stringify({ role: newRole })
+                });
+                if (res && res.ok) { showToast('User role updated.'); loadAdminUsers(); }
+                else { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to update user role', true); }
             });
         });
     }

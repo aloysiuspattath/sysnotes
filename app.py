@@ -363,6 +363,36 @@ def create_user():
     finally:
         conn.close()
 
+@app.route('/api/users/<int:user_id>/role', methods=['PUT'])
+@admin_required
+def update_user_role(user_id):
+    conn = get_db()
+    try:
+        if request.user['sub'] == user_id:
+            return jsonify({'message': 'Cannot change your own role'}), 400
+
+        data = request.json
+        new_role = data.get('role')
+        if new_role not in ['author', 'moderator']:
+            return jsonify({'message': 'Can only change role to author or moderator'}), 400
+
+        cursor = conn.cursor()
+        
+        # Ensure we don't downgrade other admins
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'message': 'User not found'}), 404
+        if row['role'] == 'admin':
+            return jsonify({'message': 'Cannot change role of an admin'}), 400
+
+        cursor.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
+        conn.commit()
+
+        return jsonify({'message': 'Role updated successfully'})
+    finally:
+        conn.close()
+
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
