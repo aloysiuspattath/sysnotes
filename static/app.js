@@ -69,6 +69,7 @@
     let activePending = false;
     let activeDrafts = false;
     let activeTag = null;
+    let activeTeamFilter = window.DEFAULT_TEAM_FILTER || null;
     let allNotes = [];
     let allCategories = [];
     let allTags = [];
@@ -809,6 +810,7 @@
         if (activeTag) params.push('tag=' + encodeURIComponent(activeTag));
         if (activePending) params.push('status=pending');
         if (activeDrafts) params.push('status=draft');
+        if (activeTeamFilter) params.push('team=' + encodeURIComponent(activeTeamFilter));
         url += params.join('&');
         
         try {
@@ -1020,6 +1022,9 @@
         } else if (activeTag) {
             textEl.textContent = 'Tag: ' + activeTag;
             el.style.display = 'inline-flex';
+        } else if (activeTeamFilter) {
+            textEl.textContent = 'Team: ' + activeTeamFilter;
+            el.style.display = 'inline-flex';
         } else {
             el.style.display = 'none';
         }
@@ -1027,6 +1032,10 @@
 
     function clearFilter() {
         activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false; activeDrafts = false;
+        activeTeamFilter = null;
+        if (window.history && window.history.pushState) {
+            window.history.pushState(null, null, '/');
+        }
         if (isAdminPageOpen) closeAdminPage();
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
@@ -2474,6 +2483,7 @@
         fetchTeams();
         setupVisibilityListeners();
         bindTeamsEventListeners();
+        updateFilterIndicator();
 
         // Note type toggles (form)
         initNoteTypeToggle('add');

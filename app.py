@@ -151,6 +151,29 @@ def handle_exception(e):
 def serve_index():
     return render_template('index.html', base_url=get_base_url())
 
+@app.route('/t/<team_name>')
+@app.route('/<team_name>')
+def serve_team_index(team_name):
+    # Exclude system folders, favicon and static assets
+    if team_name in ['static', 'uploads', 'api', 'note', 'favicon.ico'] or '.' in team_name:
+        # Let Flask fall back to static/default routing
+        return None
+        
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        # Find if the team name exists in the database
+        cursor.execute("SELECT name FROM teams WHERE LOWER(name) = ?", (team_name.lower(),))
+        row = cursor.fetchone()
+        if row:
+            # Render index.html with the selected team
+            return render_template('index.html', base_url=get_base_url(), default_team=row['name'])
+    finally:
+        conn.close()
+        
+    # If team does not exist, redirect to home page
+    return redirect('/')
+
 # Serve uploaded images
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
@@ -844,6 +867,7 @@ def get_notes():
         query = request.args.get('q', '').strip()
         category = request.args.get('category', '').strip()
         tag = request.args.get('tag', '').strip()
+        team_filter = request.args.get('team', '').strip()
         status = request.args.get('status', '').strip()
 
         page = request.args.get('page', 1, type=int)
@@ -884,6 +908,14 @@ def get_notes():
             base_select += " LEFT JOIN note_tags nt ON nt.note_id = n.id LEFT JOIN tags tg ON tg.id = nt.tag_id"
             conditions.append("tg.name = ?")
             params.append(tag)
+
+        if team_filter:
+            if team_filter.isdigit():
+                conditions.append("n.team_id = ?")
+                params.append(int(team_filter))
+            else:
+                conditions.append("n.team_id IN (SELECT id FROM teams WHERE LOWER(name) = ?)")
+                params.append(team_filter.lower())
 
         # Determine user auth details
         token = request.headers.get('Authorization')
