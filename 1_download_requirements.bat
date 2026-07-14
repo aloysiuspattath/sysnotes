@@ -7,8 +7,8 @@ echo into the "packages" folder for offline installation later.
 echo Note: You MUST run this on a machine WITH internet access.
 echo.
 
-if not exist packages mkdir packages
-pip download -r requirements.txt -d packages
+if not exist offline_packages mkdir offline_packages
+pip download -r requirements.txt -d offline_packages
 
 echo.
 echo Download complete!

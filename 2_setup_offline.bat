@@ -17,7 +17,7 @@ call venv\Scripts\activate.bat
 
 echo.
 echo Installing packages offline...
-pip install --no-index --find-links=packages -r requirements.txt
+pip install --no-index --find-links=offline_packages -r requirements.txt
 
 echo.
 echo Setup complete!

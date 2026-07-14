@@ -118,8 +118,9 @@ def test_admin_reset_user_password(client, admin_token):
     # First, let's create a user
     response = client.post('/api/users', json={
         'username': 'resetuser',
-        'password': 'oldpassword',
-        'role': 'author'
+        'password': 'ResetPass123',
+        'role': 'author',
+        'auth_type': 'local'
     }, headers=admin_headers)
     assert response.status_code == 201
     user_id = response.get_json()['id']
@@ -127,26 +128,29 @@ def test_admin_reset_user_password(client, admin_token):
     # Verify old password works (login)
     response = client.post('/api/login', json={
         'username': 'resetuser',
-        'password': 'oldpassword'
+        'password': 'ResetPass123',
+        'login_type': 'local'
     })
     assert response.status_code == 200
     
     # Reset password as admin
     response = client.post(f'/api/users/{user_id}/reset-password', json={
-        'password': 'newpassword123'
+        'password': 'NewPass123'
     }, headers=admin_headers)
     assert response.status_code == 200
 
     # Verify login with old password fails
     response = client.post('/api/login', json={
         'username': 'resetuser',
-        'password': 'oldpassword'
+        'password': 'ResetPass123',
+        'login_type': 'local'
     })
     assert response.status_code == 401
 
     # Verify login with new password succeeds
     response = client.post('/api/login', json={
         'username': 'resetuser',
-        'password': 'newpassword123'
+        'password': 'NewPass123',
+        'login_type': 'local'
     })
     assert response.status_code == 200

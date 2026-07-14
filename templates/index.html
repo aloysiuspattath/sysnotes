@@ -24,7 +24,7 @@
     <script src="static/vendor/quill/quill.js"></script>
     <script src="static/vendor/marked.min.js"></script>
     <script src="static/vendor/purify.min.js"></script>
-    <link rel="stylesheet" href="static/index.css?v=43">
+    <link rel="stylesheet" href="static/index.css?v=46">
 </head>
 <body>
 
@@ -83,6 +83,20 @@
                         Pending Notes
                     </span>
                     <span id="sidebar-pending-count" class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">0</span>
+                </div>
+            </div>
+
+            <!-- My Drafts -->
+            <div id="sidebar-draft-notes" class="sidebar-section" style="display:none; cursor:pointer;" onclick="showMyDraftNotes()">
+                <div class="sidebar-section-label" style="display: flex; justify-content: space-between; align-items: center; transition: color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-secondary)'">
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        My Drafts
+                    </span>
+                    <span id="sidebar-drafts-count" class="badge" style="background: rgba(var(--accent-rgb, 99, 102, 241), 0.2); color: var(--accent); padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">0</span>
                 </div>
             </div>
 
@@ -248,7 +262,7 @@
         </div>
 
         <!-- Notes Container -->
-        <div id="notes-container" class="notes-container view-list">
+        <div id="notes-container" class="notes-container view-stack">
             <!-- populated by JS -->
         </div>
 
@@ -616,6 +630,184 @@
 
             </div>
         </div>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- WORDPRESS-STYLE EDITOR PAGE             -->
+        <!-- ═══════════════════════════════════════ -->
+        <div id="editor-page" class="editor-page" style="display:none;">
+            <!-- Editor Header -->
+            <header class="editor-header">
+                <div class="editor-header-left">
+                    <button id="editor-back-btn" type="button" class="btn btn-ghost btn-sm">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                        Exit Editor
+                    </button>
+                    <span class="editor-autosave-status" id="editor-autosave-status">
+                        <span class="status-dot"></span> Saved
+                    </span>
+                </div>
+                <div class="editor-header-right">
+                    <button id="editor-preview-btn" type="button" class="btn btn-ghost btn-sm">Preview</button>
+                    <button id="editor-save-draft-btn" type="button" class="btn btn-secondary btn-sm">Save Draft</button>
+                    <button id="editor-publish-btn" type="button" class="btn btn-primary btn-sm">Publish</button>
+                </div>
+            </header>
+
+            <!-- Editor Layout -->
+            <div class="editor-layout">
+                <!-- Main Edit Canvas -->
+                <div class="editor-canvas">
+                    <input type="hidden" id="editor-note-id">
+                    <input type="hidden" id="editor-note-type" value="command">
+
+                    <!-- Title Input -->
+                    <div class="editor-title-container">
+                        <input type="text" id="editor-note-title" class="editor-title-input" placeholder="Add title" autocomplete="off" required>
+                    </div>
+
+                    <!-- Editor Content Areas (Toggled by Type Picker) -->
+                    <div class="editor-type-selector-bar">
+                        <span class="editor-type-selector-label">Format:</span>
+                        <div class="note-type-toggle" style="margin: 0;">
+                            <button type="button" class="note-type-btn active" data-type="command" id="editor-type-command-btn">Quick Command</button>
+                            <button type="button" class="note-type-btn" data-type="procedure" id="editor-type-procedure-btn">Procedure / Runbook</button>
+                            <button type="button" class="note-type-btn" data-type="plain" id="editor-type-plain-btn">Rich Note</button>
+                            <button type="button" class="note-type-btn" data-type="document" id="editor-type-document-btn">DOCS / SOP</button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Command Editor -->
+                    <div id="editor-section-command" class="editor-section">
+                        <div class="editor-canvas-group">
+                            <label for="editor-note-command" class="editor-canvas-label">Command</label>
+                            <textarea id="editor-note-command" class="editor-canvas-textarea form-mono" placeholder="Type your command here..." rows="4"></textarea>
+                        </div>
+                        <div class="editor-canvas-group">
+                            <label for="editor-note-description" class="editor-canvas-label">Description</label>
+                            <textarea id="editor-note-description" class="editor-canvas-textarea" placeholder="Describe what this command does..." rows="6"></textarea>
+                        </div>
+                        <div class="editor-canvas-group">
+                            <label class="editor-canvas-label">Attachments</label>
+                            <div class="image-upload-area" id="editor-note-image-area">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                <span>Click or drag files here to upload</span>
+                                <input type="file" id="editor-note-image-file" class="note-image-file-input" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx" multiple style="display:none;">
+                            </div>
+                            <div class="image-preview-row" id="editor-note-image-previews"></div>
+                        </div>
+                    </div>
+
+                    <!-- Plain Note Editor -->
+                    <div id="editor-section-plain" class="editor-section" style="display:none;">
+                        <div class="editor-canvas-group">
+                            <label class="editor-canvas-label">Content</label>
+                            <div id="editor-plain-quill-container" class="editor-quill-wrapper">
+                                <!-- Quill editor -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Editor -->
+                    <div id="editor-section-document" class="editor-section" style="display:none;">
+                        <div class="editor-canvas-group">
+                            <label for="editor-note-document-desc" class="editor-canvas-label">Description</label>
+                            <textarea id="editor-note-document-desc" class="editor-canvas-textarea" placeholder="Summary of this document or SOP..." rows="4"></textarea>
+                        </div>
+                        <div class="editor-canvas-group">
+                            <label class="editor-canvas-label">Document Source</label>
+                            <div class="note-type-toggle" style="margin-bottom: 12px; max-width: 300px;">
+                                <button type="button" class="note-type-btn active" id="editor-doc-source-file-btn">Upload File</button>
+                                <button type="button" class="note-type-btn" id="editor-doc-source-link-btn">External Link</button>
+                            </div>
+                            <div id="editor-doc-file-container">
+                                <div class="image-upload-area" id="editor-note-document-area" style="padding: 40px 20px;">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                    <span>Click to upload your document</span>
+                                    <input type="file" id="editor-note-document-file" class="note-image-file-input" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx" style="display:none;">
+                                </div>
+                                <div class="image-preview-row" id="editor-note-document-previews"></div>
+                            </div>
+                            <div id="editor-doc-link-container" style="display:none;">
+                                <input type="url" id="editor-note-document-link" class="form-input" placeholder="https://external-wiki.com/sop-doc">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Procedure / Runbook Editor -->
+                    <div id="editor-section-procedure" class="editor-section" style="display:none;">
+                        <div class="editor-canvas-group">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                                <label class="editor-canvas-label" style="margin-bottom: 0;">Procedure Steps</label>
+                                <button type="button" class="btn btn-secondary btn-xs" id="editor-add-step-btn">+ Add Step</button>
+                            </div>
+                            <div id="editor-steps-list" class="steps-builder-list">
+                                <!-- Step blocks populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview View Mode Overlay -->
+                    <div id="editor-preview-overlay" class="editor-preview-overlay" style="display:none;">
+                        <div class="editor-preview-container-inner" id="editor-preview-content"></div>
+                    </div>
+
+                </div>
+
+                <!-- WordPress-Style Document Settings Sidebar -->
+                <aside class="editor-sidebar">
+                    <!-- Sidebar Panel: Status & Visibility -->
+                    <div class="editor-sidebar-panel">
+                        <h4 class="editor-sidebar-title">Status &amp; Visibility</h4>
+                        <div class="editor-sidebar-row">
+                            <span>Status</span>
+                            <select id="editor-note-status" class="form-input form-select-sm" style="width: auto;">
+                                <option value="draft">Draft</option>
+                                <option value="published">Published</option>
+                            </select>
+                        </div>
+                        <div class="editor-sidebar-row" id="editor-approval-status-row" style="display:none;">
+                            <span>Approval Status</span>
+                            <span id="editor-approval-status-val" class="badge">Draft</span>
+                        </div>
+                    </div>
+
+                    <!-- Sidebar Panel: Organization (Category & Tags) -->
+                    <div class="editor-sidebar-panel">
+                        <h4 class="editor-sidebar-title">Categories &amp; Tags</h4>
+                        <div class="editor-sidebar-row-vertical">
+                            <label for="editor-note-category" class="form-label" style="font-size:0.75rem;">Category</label>
+                            <select id="editor-note-category" class="form-input form-select-sm">
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                        <div class="editor-sidebar-row-vertical">
+                            <label for="editor-note-tags" class="form-label" style="font-size:0.75rem;">Tags <span class="form-hint">(comma separated)</span></label>
+                            <input type="text" id="editor-note-tags" class="form-input form-input-sm" placeholder="e.g. linux, nginx, database">
+                        </div>
+                    </div>
+
+                    <!-- Sidebar Panel: Reference Links -->
+                    <div class="editor-sidebar-panel">
+                        <h4 class="editor-sidebar-title">Reference Links</h4>
+                        <div id="editor-note-reference-links-container" style="display:flex; flex-direction:column; gap:6px;">
+                            <!-- Links inputs added by JS -->
+                        </div>
+                        <button type="button" class="btn btn-ghost btn-xs" id="editor-add-ref-link-btn" style="margin-top:6px; justify-content:center; display: flex; width: 100%;">+ Add Link</button>
+                    </div>
+
+                    <!-- Sidebar Panel: Revisions (WordPress Revision List) -->
+                    <div class="editor-sidebar-panel" id="editor-revisions-panel">
+                        <h4 class="editor-sidebar-title">Revisions / Versions</h4>
+                        <div class="revisions-list" id="editor-revisions-list">
+                            <span class="no-revisions-text">No revisions recorded yet.</span>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
     </main>
 
 
@@ -693,7 +885,7 @@
                     </button>
                     <button type="button" class="note-type-btn" data-type="plain" id="add-type-plain">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        Plain Note
+                        Rich Note
                     </button>
                     <button type="button" class="note-type-btn" data-type="document" id="add-type-document">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-4 1.5 4M15 15l-1.5-4-1.5 4"></path></svg>
@@ -710,12 +902,12 @@
                 <!-- Quick command section -->
                 <div id="add-command-section">
                     <div class="form-group">
-                        <label for="add-note-command" class="form-label">Command</label>
-                        <textarea id="add-note-command" class="form-input form-textarea form-mono" placeholder="e.g. df -h" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
                         <label for="add-note-description" class="form-label">Description <span class="form-hint">(optional)</span></label>
                         <textarea id="add-note-description" class="form-input form-textarea" placeholder="Explain what this command does…" rows="5"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="add-note-command" class="form-label">Command</label>
+                        <textarea id="add-note-command" class="form-input form-textarea form-mono" placeholder="e.g. df -h" rows="3"></textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Attachments <span class="form-hint">(optional)</span></label>
@@ -779,6 +971,15 @@
                     </div>
                 </div>
 
+                <!-- Reference Links section -->
+                <div class="form-group" style="margin-top: 15px;">
+                    <label class="form-label">Reference Links</label>
+                    <div id="add-note-reference-links-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="add-reference-link-btn" style="margin-top: 8px;">
+                        + Add Reference Link
+                    </button>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group form-group-half">
                         <label for="add-note-category" class="form-label">Category</label>
@@ -831,7 +1032,7 @@
                     </button>
                     <button type="button" class="note-type-btn" data-type="plain" id="edit-type-plain">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        Plain Note
+                        Rich Note
                     </button>
                     <button type="button" class="note-type-btn" data-type="document" id="edit-type-document">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-4 1.5 4M15 15l-1.5-4-1.5 4"></path></svg>
@@ -917,6 +1118,15 @@
                     </div>
                 </div>
 
+                <!-- Reference Links section -->
+                <div class="form-group" style="margin-top: 15px;">
+                    <label class="form-label">Reference Links</label>
+                    <div id="edit-note-reference-links-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="edit-reference-link-btn" style="margin-top: 8px;">
+                        + Add Reference Link
+                    </button>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group form-group-half">
                         <label for="edit-note-category" class="form-label">Category</label>
@@ -960,6 +1170,6 @@
     <div id="toast-container" class="toast-container"></div>
 
 
-    <script src="static/app.js?v=51"></script>
+    <script src="static/app.js?v=54"></script>
 </body>
 </html>

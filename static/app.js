@@ -38,7 +38,7 @@
     };
 
     function isDocumentUrl(url) {
-        return /\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(url);
+        return /\.(pdf|doc|docx|txt|md|csv|xlsx)(\?.*)?$/i.test(url);
     }
     
     function getDocumentThumb(url, name) {
@@ -46,7 +46,7 @@
         if (/\.(doc|docx)(\?.*)?$/i.test(url) || /\.(doc|docx)$/i.test(name)) icon = ICONS.file_word;
         if (/\.(xlsx)(\?.*)?$/i.test(url) || /\.(xlsx)$/i.test(name)) icon = ICONS.file_excel;
         if (/\.(csv)(\?.*)?$/i.test(url) || /\.(csv)$/i.test(name)) icon = ICONS.file_csv;
-        if (/\.(txt)(\?.*)?$/i.test(url) || /\.(txt)$/i.test(name)) icon = ICONS.file_text;
+        if (/\.(txt|md)(\?.*)?$/i.test(url) || /\.(txt|md)$/i.test(name)) icon = ICONS.file_text;
         return `<div class="doc-thumb" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-tertiary); color:var(--text); padding:10px; text-align:center; word-break:break-all;"><div style="margin-bottom:8px;">${icon}</div><span style="font-size:10px; line-height:1.2;">${escapeHTML(name||'Document')}</span></div>`;
     }
 
@@ -56,15 +56,24 @@
     let currentUsername = localStorage.getItem('sn_username') || null;
     let quillAdd = null;
     let quillEdit = null;
+    let quillEditor = null;
+    let autosaveTimer = null;
     let currentView = localStorage.getItem('sn_view') || 'view-stack';
     let activeCategory = null;
     let activeCategoryName = null;
     let activePending = false;
+    let activeDrafts = false;
     let activeTag = null;
     let allNotes = [];
     let allCategories = [];
     let allTags = [];
     let isAdminPageOpen = false;
+
+    // Pagination state
+    let currentPage = 1;
+    let hasMoreNotes = true;
+    const notesPerPage = 50;
+    let fetchingNotes = false;
 
     // Per-modal pending image uploads (before note id is known)
     // keyed by prefix: 'add' or 'edit'
@@ -85,6 +94,17 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    function detectLanguage(code) {
+        if (!code) return 'terminal';
+        const clean = code.trim().toLowerCase();
+        if (clean.includes('select ') || clean.includes('insert ') || clean.includes('update ') || clean.includes('create table')) return 'sql';
+        if (clean.includes('get-') || clean.includes('set-') || clean.includes('new-') || clean.includes('write-host') || clean.includes('$confirm') || clean.includes('$args')) return 'powershell';
+        if (clean.startsWith('apt-get') || clean.startsWith('sudo') || clean.startsWith('docker') || clean.startsWith('git') || clean.startsWith('npm') || clean.startsWith('pip') || clean.startsWith('curl')) return 'bash';
+        if (clean.startsWith('{') && clean.endsWith('}')) return 'json';
+        if (clean.includes(':') && (clean.includes('version:') || clean.includes('services:'))) return 'yaml';
+        return 'terminal';
+    }
+
     function autolink(text) {
         if (!text) return '';
         const escaped = escapeHTML(text);
@@ -96,10 +116,11 @@
             return `<a href="${match}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-secondary btn-xs copy-path-btn" data-path="${escapeHTML(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Link</button>`;
         });
 
-        const uncPattern = /(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
-        result = result.replace(uncPattern, function(match) {
-            const cleanPath = match.replace(/\\/g, '/');
-            return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-secondary btn-xs copy-path-btn" data-path="${escapeHTML(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
+        const uncPattern = /"(\\\\[^"\n]+)"|'(\\\\[^'\n]+)'|(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
+        result = result.replace(uncPattern, function(match, g1, g2, g3) {
+            const path = g1 || g2 || g3;
+            const cleanPath = path.replace(/\\/g, '/');
+            return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${path}</a> <button type="button" class="btn btn-secondary btn-xs copy-path-btn" data-path="${escapeHTML(path)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
         });
         return result;
     }
@@ -199,12 +220,15 @@
             usernameEl.textContent = currentUsername || '';
             if (adminBtn) adminBtn.style.display = (currentRole === 'admin' || currentRole === 'moderator') ? '' : 'none';
             updatePendingCount();
+            updateDraftCount();
         } else {
             loggedOut.style.display = 'flex';
             loggedIn.style.display = 'none';
             if (adminBtn) adminBtn.style.display = 'none';
             const pendingNav = document.getElementById('sidebar-pending-notes');
             if (pendingNav) pendingNav.style.display = 'none';
+            const draftNav = document.getElementById('sidebar-draft-notes');
+            if (draftNav) draftNav.style.display = 'none';
         }
     }
 
@@ -214,6 +238,7 @@
         localStorage.removeItem('sn_role');
         localStorage.removeItem('sn_username');
         activePending = false;
+        activeDrafts = false;
         updateAuthUI();
         if (isAdminPageOpen) closeAdminPage();
         renderNotes(allNotes);
@@ -345,8 +370,12 @@
                 <button type="button" class="step-remove-btn" title="Remove step">${ICONS.close}</button>
             </div>
             <div class="step-card-body">
-                <textarea class="step-command-input" placeholder="Command(s) for this step&#10;e.g. srvctl stop listener -n node1" rows="3">${escapeHTML(stepData?.command || '')}</textarea>
-                <textarea class="step-desc-input" placeholder="Description / notes for this step (optional)" rows="2">${escapeHTML(stepData?.description || '')}</textarea>
+                <div class="step-blocks-container" id="blocks-container-${sid}"></div>
+                <div class="step-add-block-buttons" style="margin-bottom: 10px; display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-sm btn-ghost add-desc-block-btn" data-sid="${sid}">+ Description</button>
+                    <button type="button" class="btn btn-sm btn-ghost add-code-block-btn" data-sid="${sid}">+ Code Block</button>
+                    <button type="button" class="btn btn-sm btn-ghost add-image-block-btn" data-sid="${sid}">+ Image Block</button>
+                </div>
                 <div class="step-image-row">
                     <button type="button" class="step-upload-btn" data-sid="${sid}">
                         ${ICONS.image} Add File
@@ -366,10 +395,146 @@
             });
         }
 
+        const blocksContainer = card.querySelector('.step-blocks-container');
+        
+        function appendBlock(type, content = '') {
+            const blockRow = document.createElement('div');
+            blockRow.className = 'step-block-row';
+            blockRow.dataset.type = type;
+            blockRow.style.position = 'relative';
+            blockRow.style.marginBottom = '10px';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.innerHTML = ICONS.close;
+            removeBtn.className = 'btn-icon btn-icon-danger';
+            removeBtn.style.position = 'absolute';
+            removeBtn.style.top = '5px';
+            removeBtn.style.right = '5px';
+            removeBtn.style.zIndex = '10';
+            removeBtn.onclick = () => {
+                blockRow.remove();
+                if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+            };
+            
+            if (type === 'image') {
+                blockRow.style.border = '1px dashed var(--border)';
+                blockRow.style.padding = '15px';
+                blockRow.style.borderRadius = 'var(--r)';
+                blockRow.style.textAlign = 'center';
+                blockRow.style.background = 'var(--surface)';
+
+                const hiddenInput = document.createElement('textarea');
+                hiddenInput.className = 'step-block-input';
+                hiddenInput.style.display = 'none';
+                hiddenInput.value = content;
+
+                const imgPreview = document.createElement('img');
+                imgPreview.style.maxWidth = '100%';
+                imgPreview.style.maxHeight = '300px';
+                imgPreview.style.borderRadius = 'var(--r)';
+                imgPreview.style.marginTop = '10px';
+                imgPreview.style.display = content ? 'inline-block' : 'none';
+                imgPreview.src = content || '';
+
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = 'image/*';
+                fileInput.style.display = 'none';
+
+                const uploadBtn = document.createElement('button');
+                uploadBtn.type = 'button';
+                uploadBtn.className = 'btn btn-outline';
+                uploadBtn.innerHTML = ICONS.image + ' Select Image';
+                uploadBtn.onclick = () => fileInput.click();
+
+                fileInput.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > 1200) {
+                                height = Math.round(height * 1200 / width);
+                                width = 1200;
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                            hiddenInput.value = dataUrl;
+                            imgPreview.src = dataUrl;
+                            imgPreview.style.display = 'inline-block';
+                            uploadBtn.innerHTML = ICONS.image + ' Change Image';
+                            if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+                        };
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                if (content) uploadBtn.innerHTML = ICONS.image + ' Change Image';
+
+                blockRow.appendChild(hiddenInput);
+                blockRow.appendChild(fileInput);
+                blockRow.appendChild(uploadBtn);
+                blockRow.appendChild(document.createElement('br'));
+                blockRow.appendChild(imgPreview);
+                blockRow.appendChild(removeBtn);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.className = type === 'code' ? 'form-input form-textarea form-mono step-block-input' : 'form-input form-textarea step-block-input';
+                textarea.rows = type === 'code' ? 3 : 2;
+                textarea.placeholder = type === 'code' ? 'Command(s) for this step' : 'Description / notes...';
+                textarea.value = content;
+                textarea.oninput = () => {
+                    if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+                };
+                
+                blockRow.appendChild(textarea);
+                blockRow.appendChild(removeBtn);
+            }
+            
+            blocksContainer.appendChild(blockRow);
+        }
+        
+        card.querySelector('.add-desc-block-btn').onclick = () => {
+            appendBlock('desc');
+            if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+        };
+        card.querySelector('.add-code-block-btn').onclick = () => {
+            appendBlock('code');
+            if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+        };
+        card.querySelector('.add-image-block-btn').onclick = () => {
+            appendBlock('image');
+            if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
+        };
+        
+        // Prefill blocks
+        if (stepData?.blocks && stepData.blocks.length > 0) {
+            stepData.blocks.forEach(b => appendBlock(b.type, b.content));
+        } else {
+            // Legacy format fallback
+            if (stepData?.description) appendBlock('desc', stepData.description);
+            if (stepData?.command) appendBlock('code', stepData.command);
+            // Default empty blocks if totally new step
+            if (!stepData?.description && !stepData?.command && (!stepData?.blocks || stepData.blocks.length === 0)) {
+                appendBlock('desc');
+                appendBlock('code');
+            }
+        }
+
         // Remove step
         card.querySelector('.step-remove-btn').addEventListener('click', () => {
             card.remove();
             renumberSteps(prefix);
+            if (typeof triggerAutosaveDebounce === 'function') triggerAutosaveDebounce();
         });
 
         // Image upload button → hidden input
@@ -395,16 +560,54 @@
         const list = document.getElementById(`${prefix}-steps-list`);
         const steps = [];
         Array.from(list.children).forEach(card => {
+            const blocks = [];
+            Array.from(card.querySelectorAll('.step-block-row')).forEach(blockRow => {
+                const content = blockRow.querySelector('.step-block-input').value.trim();
+                if (content) {
+                    blocks.push({
+                        type: blockRow.dataset.type,
+                        content: content
+                    });
+                }
+            });
+
             steps.push({
                 title: card.querySelector('.step-title-input').value.trim(),
-                command: card.querySelector('.step-command-input').value.trim(),
-                description: card.querySelector('.step-desc-input').value.trim(),
+                blocks: blocks,
+                command: '', // legacy field, kept empty
+                description: '', // legacy field, kept empty
                 _sid: card.dataset.sid,
                 _pendingFiles: Array.from(card.querySelectorAll('.step-img-previews .image-preview-thumb'))
                     .map(t => t._file).filter(Boolean),
             });
         });
         return steps;
+    }
+
+    function addReferenceLinkInput(prefix, val = '') {
+        const container = document.getElementById(`${prefix}-note-reference-links-container`);
+        if (!container) return;
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+        row.innerHTML = `
+            <input type="url" class="form-input ref-link-input" placeholder="https://..." value="${escapeHTML(val)}" style="flex:1;">
+            <button type="button" class="btn-icon btn-icon-danger ref-link-remove" style="padding: 0 10px;">${ICONS.close}</button>
+        `;
+        row.querySelector('.ref-link-remove').addEventListener('click', () => row.remove());
+        container.appendChild(row);
+    }
+
+    function collectReferenceLinks(prefix) {
+        const container = document.getElementById(`${prefix}-note-reference-links-container`);
+        if (!container) return [];
+        const inputs = container.querySelectorAll('.ref-link-input');
+        const links = [];
+        inputs.forEach(input => {
+            const v = input.value.trim();
+            if (v) links.push(v);
+        });
+        return links;
     }
 
     // ─── IMAGE HANDLING (step) ───────────────────────────
@@ -512,7 +715,7 @@
     }
 
     // ─── IMAGE LIGHTBOX ──────────────────────────────────
-    function openLightbox(src) {
+    async function openLightbox(src) {
         if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
@@ -523,13 +726,50 @@
         }
         const overlay = document.createElement('div');
         overlay.className = 'img-lightbox-overlay';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
+        closeBtn.onclick = () => overlay.remove();
+
         if (/\.pdf(\?.*)?$/i.test(src)) {
-            overlay.innerHTML = `<object data="${escapeHTML(src)}" type="application/pdf" style="width:80%; height:85vh; border:none; background:white; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"><p>Your browser does not support PDFs. <a href="${escapeHTML(src)}">Download the PDF</a>.</p></object>`;
-            const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '×';
-            closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
-            closeBtn.onclick = () => overlay.remove();
+            overlay.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text); font-size:1.2rem;">Loading PDF...</div>`;
             overlay.appendChild(closeBtn);
+            
+            fetch(src)
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.blob();
+                })
+                .then(blob => {
+                    const objectUrl = URL.createObjectURL(blob);
+                    overlay.innerHTML = `<object data="${objectUrl}" type="application/pdf" style="width:80%; height:85vh; border:none; background:white; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"><p>Your browser does not support PDFs. <a href="${escapeHTML(src)}" target="_blank" download>Download the PDF</a>.</p></object>`;
+                    overlay.appendChild(closeBtn);
+                    
+                    // Revoke object URL when overlay is removed to free memory
+                    const observer = new MutationObserver(() => {
+                        if (!document.body.contains(overlay)) {
+                            URL.revokeObjectURL(objectUrl);
+                            observer.disconnect();
+                        }
+                    });
+                    observer.observe(document.body, { childList: true, subtree: true });
+                })
+                .catch(err => {
+                    overlay.innerHTML = `<div style="background:var(--bg); padding:20px; border-radius:8px; color:var(--text-danger); box-shadow:0 4px 12px rgba(0,0,0,0.5);">Failed to load PDF. <br><br><a href="${escapeHTML(src)}" target="_blank" download style="color:var(--primary); text-decoration:underline;">Click here to open or download it directly</a>.</div>`;
+                    overlay.appendChild(closeBtn);
+                });
+        } else if (/\.md(\?.*)?$/i.test(src)) {
+            try {
+                const res = await fetch(src);
+                const text = await res.text();
+                const html = DOMPurify.sanitize(marked.parse(text));
+                overlay.innerHTML = `<div style="width:80%; max-width:800px; max-height:85vh; overflow-y:auto; background:var(--bg); color:var(--text); border-radius:8px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.5); text-align:left;" class="md-preview-content">${html}</div>`;
+                overlay.appendChild(closeBtn);
+            } catch (err) {
+                overlay.innerHTML = `<div style="background:var(--bg); padding:20px; border-radius:8px; color:var(--text-danger);">Failed to load markdown file.</div>`;
+                overlay.appendChild(closeBtn);
+            }
         } else {
             overlay.innerHTML = `<img src="${escapeHTML(src)}" alt="Image preview">`;
             overlay.addEventListener('click', () => overlay.remove());
@@ -538,19 +778,51 @@
     }
 
     // ─── DATA FETCHING ───────────────────────────────────
-    async function fetchNotes() {
-        let url = 'api/notes?';
+    async function fetchNotes(resetPage = true) {
+        if (fetchingNotes) return;
+        fetchingNotes = true;
+
+        if (resetPage) {
+            currentPage = 1;
+            hasMoreNotes = true;
+            document.getElementById('notes-container').innerHTML = '';
+        }
+
+        if (!hasMoreNotes) {
+            fetchingNotes = false;
+            return;
+        }
+
+        let url = `api/notes?page=${currentPage}&limit=${notesPerPage}&`;
         const params = [];
         const q = document.getElementById('search-input').value.trim();
         if (q) params.push('q=' + encodeURIComponent(q));
         if (activeCategory) params.push('category=' + activeCategory);
         if (activeTag) params.push('tag=' + encodeURIComponent(activeTag));
         if (activePending) params.push('status=pending');
+        if (activeDrafts) params.push('status=draft');
         url += params.join('&');
-        const res = await apiFetch(url, { headers: authHeaders() });
-        if (!res) return;
-        allNotes = await res.json();
-        renderNotes(allNotes);
+        
+        try {
+            const res = await apiFetch(url, { headers: authHeaders() });
+            if (!res) return;
+            const newNotes = await res.json();
+            
+            if (newNotes.length < notesPerPage) {
+                hasMoreNotes = false;
+            }
+            
+            if (resetPage) {
+                allNotes = newNotes;
+            } else {
+                allNotes = allNotes.concat(newNotes);
+            }
+            
+            renderNotes(newNotes, !resetPage);
+            currentPage++;
+        } finally {
+            fetchingNotes = false;
+        }
     }
 
     async function fetchCategories() {
@@ -581,7 +853,7 @@
         if (st) st.textContent = data.total_tags || 0;
     }
 
-    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); updatePendingCount(); }
+    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); updatePendingCount(); updateDraftCount(); }
 
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
@@ -617,6 +889,7 @@
                 }
                 activeTag = null;
                 activePending = false;
+                activeDrafts = false;
                 updateFilterIndicator();
                 fetchNotes();
                 renderSidebarCategories(allCategories);
@@ -644,7 +917,7 @@
                 const id = item.dataset.id;
                 if (activeCategory == id) { activeCategory = null; activeCategoryName = null; }
                 else { activeCategory = id; const cat = allCategories.find(c => c.id == id); activeCategoryName = cat ? cat.name : ''; }
-                activeTag = null; activePending = false;
+                activeTag = null; activePending = false; activeDrafts = false;
                 if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
@@ -668,7 +941,7 @@
                 const tagName = pill.dataset.tag;
                 if (activeTag === tagName) { activeTag = null; }
                 else { activeTag = tagName; }
-                activeCategory = null; activeCategoryName = null; activePending = false;
+                activeCategory = null; activeCategoryName = null; activePending = false; activeDrafts = false;
                 if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
@@ -683,6 +956,9 @@
         if (activePending) {
             textEl.innerHTML = '<span style="color:#f59e0b; display:flex; align-items:center; gap:6px;">⏱️ My Pending Notes</span>';
             el.style.display = 'inline-flex';
+        } else if (activeDrafts) {
+            textEl.innerHTML = '<span style="color:var(--accent); display:flex; align-items:center; gap:6px;">✍️ My Draft Notes</span>';
+            el.style.display = 'inline-flex';
         } else if (activeCategory) {
             textEl.textContent = 'Category: ' + (activeCategoryName || activeCategory);
             el.style.display = 'inline-flex';
@@ -695,7 +971,7 @@
     }
 
     function clearFilter() {
-        activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false;
+        activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false; activeDrafts = false;
         if (isAdminPageOpen) closeAdminPage();
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
@@ -707,6 +983,7 @@
             switchAdminTab('ap-pending-tab');
         } else {
             activePending = true;
+            activeDrafts = false;
             activeCategory = null; activeCategoryName = null; activeTag = null;
             document.getElementById('notes-container').style.display = '';
             document.getElementById('empty-state').style.display = 'none';
@@ -716,6 +993,19 @@
             fetchNotes();
             if (window.innerWidth <= 768) closeSidebar();
         }
+    };
+
+    window.showMyDraftNotes = function() {
+        activeDrafts = true;
+        activePending = false;
+        activeCategory = null; activeCategoryName = null; activeTag = null;
+        document.getElementById('notes-container').style.display = '';
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('category-cards-grid').style.display = 'none';
+        if (isAdminPageOpen) closeAdminPage();
+        updateFilterIndicator();
+        fetchNotes();
+        if (window.innerWidth <= 768) closeSidebar();
     };
     
     async function updatePendingCount() {
@@ -733,6 +1023,24 @@
             }
         } catch (err) {
             console.error('Error fetching pending notes count', err);
+        }
+    }
+
+    async function updateDraftCount() {
+        if (!currentToken) {
+            document.getElementById('sidebar-draft-notes').style.display = 'none';
+            return;
+        }
+        try {
+            const res = await apiFetch('api/notes?status=draft', { headers: authHeaders() });
+            if (res && res.ok) {
+                const notes = await res.json();
+                const count = notes.length;
+                document.getElementById('sidebar-drafts-count').textContent = count;
+                document.getElementById('sidebar-draft-notes').style.display = count > 0 ? 'block' : 'none';
+            }
+        } catch (err) {
+            console.error('Error fetching draft count', err);
         }
     }
 
@@ -768,9 +1076,24 @@
         const isProcedure = note.note_type === 'procedure';
         const typeBadge = `<span class="note-type-badge ${isProcedure ? 'type-procedure' : 'type-command'}">${isProcedure ? ICONS.steps + ' Procedure' : ICONS.copy + ' Command'}</span>`;
         
-        const pendingBadge = !note.approved
-            ? `<span class="note-pending-badge" style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); margin-left: 8px; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; border: 1px solid rgba(245, 158, 11, 0.3);">⏱️ Pending</span>`
-            : '';
+        let pendingBadge = '';
+        if (note.status === 'draft') {
+            pendingBadge = `<span class="note-pending-badge" style="background: rgba(var(--accent-rgb, 99, 102, 241), 0.15); color: var(--accent); margin-left: 8px; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; border: 1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.3);">✍️ Draft</span>`;
+        } else if (!note.approved) {
+            pendingBadge = `<span class="note-pending-badge" style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); margin-left: 8px; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; border: 1px solid rgba(245, 158, 11, 0.3);">⏱️ Pending</span>`;
+        }
+            
+        let refLinksHtml = '';
+        if (note.reference_links) {
+            try {
+                const links = typeof note.reference_links === 'string' ? JSON.parse(note.reference_links) : note.reference_links;
+                if (links && links.length > 0) {
+                    refLinksHtml = '<div class="note-reference-links" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">' +
+                        links.map(l => `<a href="${escapeHTML(l)}" target="_blank" style="font-size: 0.8rem; background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; color: var(--accent); text-decoration: none; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 4px;">🔗 ${escapeHTML(l)}</a>`).join('') +
+                        '</div>';
+                }
+            } catch(e) {}
+        }
 
         if (isProcedure) {
             const steps = note.steps || [];
@@ -814,12 +1137,13 @@
                     ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
                     
                     ${stepsContentHtml}
+                    ${refLinksHtml}
 
                     <div class="note-meta">
                         ${categoryBadge}
                         ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
                         ${metaHtml}
-                        <span class="note-meta-steps">${ICONS.steps} ${steps.length} steps</span>
+                        <span class="note-meta-steps">${ICONS.steps} ${note.step_count !== undefined ? note.step_count : steps.length} steps</span>
                     </div>
                 </div>
             </div>`;
@@ -843,6 +1167,7 @@
                     </div>
                     ${note.description ? `<p class="note-description" style="margin-top:10px;">${autolink(note.description)}</p>` : ''}
                     ${noteImgsHtml ? `<div class="note-inline-images" style="margin-top:10px;">${noteImgsHtml}</div>` : ''}
+                    ${refLinksHtml}
                     
                     <div class="note-meta">
                         ${categoryBadge}
@@ -853,7 +1178,7 @@
             </div>`;
         } else if (note.note_type === 'plain') {
             let renderedHtml = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description || '') : escapeHTML(note.description || '');
-            const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Plain Note</span>`;
+            const typeBadgePlain = `<span class="note-type-badge type-procedure" style="background-color: var(--primary);">${ICONS.copy} Rich Note</span>`;
             return `<div class="note-item note-type-plain" style="animation-delay:${delay}s" data-note-id="${note.id}">
                 <div style="width:100%;">
                     <div class="note-header">
@@ -864,7 +1189,8 @@
                         </div>
                         ${actions}
                     </div>
-                    <div class="markdown-body" style="padding:1rem 0; font-size:14px; line-height:1.6;">${renderedHtml}</div>
+                    <div class="ql-editor markdown-body" style="padding:1rem 0 !important; min-height: auto; font-size:14px; line-height:1.6;">${renderedHtml}</div>
+                    ${refLinksHtml}
                     
                     <div class="note-meta">
                         ${categoryBadge}
@@ -893,6 +1219,7 @@
                         ${actions}
                     </div>
                     ${note.description ? `<p class="note-description">${autolink(note.description)}</p>` : ''}
+                    ${refLinksHtml}
                     <div class="note-meta">
                         ${categoryBadge}
                         ${tagsHtml ? `<div class="note-tags-row">${tagsHtml}</div>` : ''}
@@ -902,6 +1229,16 @@
                 </div>
                 <div class="note-command-wrapper">
                     <div class="note-code-block">
+                        <div class="terminal-header">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="terminal-dots">
+                                    <span class="dot red"></span>
+                                    <span class="dot yellow"></span>
+                                    <span class="dot green"></span>
+                                </div>
+                                <span class="terminal-title">${detectLanguage(note.command)}</span>
+                            </div>
+                        </div>
                         <pre class="note-code"><code>${escapeHTML(note.command)}</code></pre>
                         <button class="note-copy-btn" title="Copy">${ICONS.copy}</button>
                     </div>
@@ -910,58 +1247,59 @@
         }
     }
 
+    // Event delegation is now handled globally on #notes-container in DOMContentLoaded
     function attachNoteCardEventListeners(container, isReviewMode) {
-        // Attach copy buttons
-        container.querySelectorAll('.note-copy-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const code = btn.closest('.note-code-block').querySelector('code').textContent;
-                copyToClipboard(code, btn);
-            });
-        });
-
-        // Attach copy-path buttons for UNC links
-        container.querySelectorAll('.copy-path-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                copyToClipboard(btn.dataset.path, btn);
-            });
-        });
-
-        if (!isReviewMode) {
-            // Attach edit/delete
-            container.querySelectorAll('.note-edit-btn').forEach(btn => btn.addEventListener('click', () => openEditNoteModal(btn.dataset.id)));
-            container.querySelectorAll('.note-delete-btn').forEach(btn => btn.addEventListener('click', () => deleteNote(btn.dataset.id)));
-        }
-
-        // Image and Document lightbox
-        container.querySelectorAll('.procedure-step-image, .note-inline-image').forEach(el => {
-            el.addEventListener('click', () => {
-                openLightbox(el.dataset.src);
-            });
-        });
+        // Kept for backward compatibility if called from elsewhere, but empty
     }
 
-    function renderNotes(notes) {
+    function renderNotes(notes, append = false) {
         const container = document.getElementById('notes-container');
         const emptyState = document.getElementById('empty-state');
         if (isAdminPageOpen) return;
 
-        if (!notes || notes.length === 0) {
+        if (!append && (!notes || notes.length === 0)) {
             container.innerHTML = '';
             emptyState.style.display = 'flex';
+            
+            // Hide loading trigger if it exists
+            const trigger = document.getElementById('scroll-trigger');
+            if (trigger) trigger.style.display = 'none';
             return;
         }
         emptyState.style.display = 'none';
 
         let html = '';
         notes.forEach((note, idx) => {
+            // Only apply staggered animation to the first 10 items to prevent lag
             const delay = Math.min(idx * 0.04, 0.4);
-            html += buildNoteCardHtml(note, false, delay);
+            const useDelay = (!append && idx < 10) ? delay : 0;
+            html += buildNoteCardHtml(note, false, useDelay);
         });
 
-        container.innerHTML = html;
-        attachNoteCardEventListeners(container, false);
+        if (append) {
+            container.insertAdjacentHTML('beforeend', html);
+        } else {
+            container.innerHTML = html;
+        }
+        
+        // Handle scroll trigger element
+        let trigger = document.getElementById('scroll-trigger');
+        if (!trigger) {
+            trigger = document.createElement('div');
+            trigger.id = 'scroll-trigger';
+            trigger.style.height = '20px';
+            trigger.style.width = '100%';
+            container.parentNode.appendChild(trigger);
+            
+            // Setup intersection observer
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && hasMoreNotes && !fetchingNotes) {
+                    fetchNotes(false);
+                }
+            }, { rootMargin: '200px' });
+            observer.observe(trigger);
+        }
+        trigger.style.display = hasMoreNotes ? 'block' : 'none';
     }
 
     // --- RENDER: MODAL EDIT ---
@@ -1035,6 +1373,9 @@
         document.getElementById('add-steps-list').innerHTML = '';
         document.getElementById('add-note-image-previews').innerHTML = '';
         document.getElementById('add-note-document-previews').innerHTML = '';
+        if (document.getElementById('add-note-reference-links-container')) {
+            document.getElementById('add-note-reference-links-container').innerHTML = '';
+        }
         if (document.getElementById('add-note-document-desc')) document.getElementById('add-note-document-desc').value = '';
         setNoteType('add', 'command');
     }
@@ -1048,6 +1389,7 @@
         const categoryId = document.getElementById('add-note-category').value;
         const tags = document.getElementById('add-note-tags').value.split(',').map(t => t.trim()).filter(t => t);
         const steps = noteType === 'procedure' ? collectSteps('add') : [];
+        const reference_links = collectReferenceLinks('add');
 
         if (noteType === 'command' && !command) { showToast('Command is required', true); return; }
         if (noteType === 'procedure' && steps.length === 0) { showToast('At least one step is required', true); return; }
@@ -1063,7 +1405,8 @@
             title, note_type: noteType,
             description: description || null,
             category_id: categoryId ? parseInt(categoryId) : null,
-            tags
+            tags,
+            reference_links
         };
         if (noteType === 'command') body.command = command;
         if (noteType === 'procedure') body.steps = steps;
@@ -1085,19 +1428,22 @@
             body: JSON.stringify(body)
         });
 
-        if (res && res.ok) {
-            const data = await res.json();
-            if (noteType === 'command') {
-                await uploadPendingImages(data.id, document.getElementById('add-note-image-previews'));
-            } else if (noteType === 'document') {
-                await uploadPendingImages(data.id, document.getElementById('add-note-document-previews'));
+        if (res) {
+            if (res.ok) {
+                const data = await res.json();
+                if (noteType === 'command') {
+                    await uploadPendingImages(data.id, document.getElementById('add-note-image-previews'));
+                } else if (noteType === 'document') {
+                    await uploadPendingImages(data.id, document.getElementById('add-note-document-previews'));
+                }
+                closeModal('add-note-modal');
+                showToast('Note added successfully');
+                fetchNotes();
+                fetchCategories();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.message || 'Failed to add command', true);
             }
-            closeModal('add-note-modal');
-            showToast('Note added successfully');
-            fetchNotes();
-            fetchCategories();
-        } else {
-            showToast('Failed to add command', true);
         }
     }
 
@@ -1113,128 +1459,473 @@
     }
 
     // --- RENDER: MODAL EDIT ---
-    function openEditNoteModal(noteId) {
-        const note = allNotes.find(n => n.id == noteId);
-        if (!note) return;
-        editNoteId = note.id;
+    // ─── WORDPRESS STYLE EDITOR ────────────────────────
+    let isSavingNote = false;
 
-        document.getElementById('edit-note-id').value = note.id;
-        document.getElementById('edit-note-title').value = note.title;
-        document.getElementById('edit-note-command').value = note.command || '';
-        document.getElementById('edit-note-description').value = note.description || '';
-        if (document.getElementById('edit-note-document-desc')) {
-            document.getElementById('edit-note-document-desc').value = note.note_type === 'document' ? (note.description || '') : '';
-        }
+    function setEditorNoteType(type) {
+        document.getElementById('editor-note-type').value = type;
         
-        if (quillEdit) {
-            quillEdit.root.innerHTML = note.note_type === 'plain' ? (note.description || '') : '';
+        // Update toggles
+        document.querySelectorAll('#editor-page .note-type-btn').forEach(btn => {
+            if (btn.dataset.type === type) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+
+        // Toggle editor sections
+        document.getElementById('editor-section-command').style.display = type === 'command' ? 'flex' : 'none';
+        document.getElementById('editor-section-plain').style.display = type === 'plain' ? 'flex' : 'none';
+        document.getElementById('editor-section-document').style.display = type === 'document' ? 'flex' : 'none';
+        document.getElementById('editor-section-procedure').style.display = type === 'procedure' ? 'flex' : 'none';
+
+        if (type === 'procedure') {
+            const stepsList = document.getElementById('editor-steps-list');
+            if (stepsList.children.length === 0) {
+                addStep('editor');
+            }
         }
-        document.getElementById('edit-note-category').value = note.category_id || '';
-        document.getElementById('edit-note-tags').value = (note.tags || []).join(', ');
+    }
 
-        // Reset steps list
-        document.getElementById('edit-steps-list').innerHTML = '';
-        document.getElementById('edit-note-image-previews').innerHTML = '';
-        document.getElementById('edit-note-document-previews').innerHTML = '';
+    function toggleEditorDocSource(source) {
+        const fileBtn = document.getElementById('editor-doc-source-file-btn');
+        const linkBtn = document.getElementById('editor-doc-source-link-btn');
+        const fileContainer = document.getElementById('editor-doc-file-container');
+        const linkContainer = document.getElementById('editor-doc-link-container');
 
-        // Set note type and populate steps
-        setNoteType('edit', note.note_type || 'command');
-        if (note.note_type === 'procedure' && note.steps) {
-            note.steps.forEach(step => addStep('edit', step));
+        if (source === 'file') {
+            fileBtn.classList.add('active');
+            linkBtn.classList.remove('active');
+            fileContainer.style.display = 'block';
+            linkContainer.style.display = 'none';
+        } else {
+            fileBtn.classList.remove('active');
+            linkBtn.classList.add('active');
+            fileContainer.style.display = 'none';
+            linkContainer.style.display = 'block';
         }
+    }
 
-        // Show existing note-level images for edit
-        if (note.images && note.images.length) {
-            const previewRow = note.note_type === 'document' ? document.getElementById('edit-note-document-previews') : document.getElementById('edit-note-image-previews');
-            note.images.forEach(img => addServerImagePreview(previewRow, img, null, 'edit'));
-        }
+    async function openWordPressEditor(mode, noteId = null) {
+        document.body.classList.add('in-editor');
+        document.getElementById('editor-page').style.display = 'flex';
+        
+        // Hide preview overlay by default
+        document.getElementById('editor-preview-overlay').style.display = 'none';
+        document.getElementById('editor-preview-btn').textContent = 'Preview';
 
-        if (note.note_type === 'document') {
-            if (note.command && (!note.images || note.images.length === 0)) {
-                document.getElementById('edit-note-document-link').value = note.command;
-                if (window.toggleDocSource) window.toggleDocSource('edit', 'link');
-            } else {
-                document.getElementById('edit-note-document-link').value = '';
-                if (window.toggleDocSource) window.toggleDocSource('edit', 'file');
+        // Clear timer
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+
+        // Populate categories
+        const catSelect = document.getElementById('editor-note-category');
+        catSelect.innerHTML = '<option value="">Select Category</option>';
+        allCategories.filter(c => c.enabled).forEach(c => {
+            catSelect.innerHTML += `<option value="${c.id}">${escapeHTML(c.name)}</option>`;
+        });
+
+        // Reset inputs
+        document.getElementById('editor-note-id').value = '';
+        document.getElementById('editor-note-title').value = '';
+        document.getElementById('editor-note-command').value = '';
+        document.getElementById('editor-note-description').value = '';
+        document.getElementById('editor-note-document-desc').value = '';
+        document.getElementById('editor-note-document-link').value = '';
+        document.getElementById('editor-note-tags').value = '';
+        document.getElementById('editor-note-status').value = 'draft';
+        document.getElementById('editor-approval-status-row').style.display = 'none';
+        document.getElementById('editor-note-reference-links-container').innerHTML = '';
+        document.getElementById('editor-note-image-previews').innerHTML = '';
+        document.getElementById('editor-note-document-previews').innerHTML = '';
+        document.getElementById('editor-steps-list').innerHTML = '';
+        document.getElementById('editor-revisions-list').innerHTML = '<span class="no-revisions-text">No revisions recorded yet.</span>';
+        
+        if (quillEditor) quillEditor.setText('');
+
+        const statusText = document.getElementById('editor-autosave-status');
+        statusText.innerHTML = '<span class="status-dot"></span> Draft ready';
+        statusText.className = 'editor-autosave-status';
+
+        if (mode === 'add') {
+            setEditorNoteType('command');
+            toggleEditorDocSource('file');
+            document.getElementById('editor-revisions-panel').style.display = 'none';
+        } else {
+            document.getElementById('editor-revisions-panel').style.display = 'block';
+            statusText.innerHTML = '<span class="status-dot"></span> Loading note...';
+
+            try {
+                const res = await apiFetch('api/notes/' + noteId, { headers: authHeaders() });
+                if (res && res.ok) {
+                    const note = await res.json();
+                    document.getElementById('editor-note-id').value = note.id;
+                    document.getElementById('editor-note-title').value = note.title;
+                    document.getElementById('editor-note-tags').value = (note.tags || []).join(', ');
+                    document.getElementById('editor-note-status').value = note.status || 'published';
+                    document.getElementById('editor-note-category').value = note.category_id || '';
+                    
+                    // Approval badge
+                    const appRow = document.getElementById('editor-approval-status-row');
+                    const appVal = document.getElementById('editor-approval-status-val');
+                    appRow.style.display = 'flex';
+                    if (note.approved) {
+                        appVal.textContent = 'Approved';
+                        appVal.className = 'badge badge-success';
+                    } else {
+                        appVal.textContent = 'Pending Review';
+                        appVal.className = 'badge badge-warning';
+                    }
+
+                    // Populate links
+                    if (note.reference_links) {
+                        try {
+                            const links = JSON.parse(note.reference_links);
+                            links.forEach(l => addReferenceLinkInput('editor', l));
+                        } catch(e){}
+                    }
+
+                    setEditorNoteType(note.note_type || 'command');
+
+                    if (note.note_type === 'command') {
+                        document.getElementById('editor-note-command').value = note.command || '';
+                        document.getElementById('editor-note-description').value = note.description || '';
+                        if (note.images) {
+                            const previewRow = document.getElementById('editor-note-image-previews');
+                            note.images.forEach(img => addServerImagePreview(previewRow, img, null, 'editor'));
+                        }
+                    } else if (note.note_type === 'plain') {
+                        if (quillEditor) quillEditor.root.innerHTML = note.description || '';
+                    } else if (note.note_type === 'document') {
+                        document.getElementById('editor-note-document-desc').value = note.description || '';
+                        if (note.command && (!note.images || note.images.length === 0)) {
+                            document.getElementById('editor-note-document-link').value = note.command;
+                            toggleEditorDocSource('link');
+                        } else {
+                            toggleEditorDocSource('file');
+                            if (note.images) {
+                                const previewRow = document.getElementById('editor-note-document-previews');
+                                note.images.forEach(img => addServerImagePreview(previewRow, img, null, 'editor'));
+                            }
+                        }
+                    } else if (note.note_type === 'procedure') {
+                        document.getElementById('editor-steps-list').innerHTML = '';
+                        if (note.steps) {
+                            note.steps.forEach(step => addStep('editor', step));
+                        }
+                    }
+
+                    fetchEditorRevisions(note.id);
+                    statusText.innerHTML = '<span class="status-dot"></span> Draft loaded';
+                    statusText.className = 'editor-autosave-status saved';
+                }
+            } catch(e) {
+                showToast('Failed to load note data', true);
+                closeWordPressEditor();
             }
         }
 
-        openModal('edit-note-modal');
+        // Setup change listeners for autosave
+        setupEditorAutosaveListeners();
     }
 
-    async function handleEditNote(e) {
-        e.preventDefault();
-        const noteId = document.getElementById('edit-note-id').value;
-        const title = document.getElementById('edit-note-title').value.trim();
-        const noteType = document.getElementById('edit-note-type').value;
-        const command = document.getElementById('edit-note-command').value.trim();
-        let description = document.getElementById('edit-note-description').value.trim();
-        const categoryId = document.getElementById('edit-note-category').value;
-        const tags = document.getElementById('edit-note-tags').value.split(',').map(t => t.trim()).filter(t => t);
-        const steps = noteType === 'procedure' ? collectSteps('edit') : [];
+    function closeWordPressEditor() {
+        document.body.classList.remove('in-editor');
+        document.getElementById('editor-page').style.display = 'none';
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        refreshAll();
+    }
 
-        if (noteType === 'command' && !command) { showToast('Command is required', true); return; }
-        if (noteType === 'procedure' && steps.length === 0) { showToast('At least one step is required', true); return; }
-        if (noteType === 'plain') {
-            description = quillEdit ? quillEdit.root.innerHTML : '';
-            if (!description.trim()) { showToast('Note content is required', true); return; }
+    function setupEditorAutosaveListeners() {
+        const autosaveSelectors = [
+            '#editor-note-title',
+            '#editor-note-command',
+            '#editor-note-description',
+            '#editor-note-document-desc',
+            '#editor-note-document-link',
+            '#editor-note-tags',
+            '#editor-note-category',
+            '#editor-note-status'
+        ];
+
+        autosaveSelectors.forEach(sel => {
+            const el = document.querySelector(sel);
+            if (el) {
+                el.removeEventListener('input', triggerAutosaveDebounce);
+                el.removeEventListener('change', triggerAutosaveDebounce);
+                el.addEventListener('input', triggerAutosaveDebounce);
+                el.addEventListener('change', triggerAutosaveDebounce);
+            }
+        });
+
+        // Quill change listener
+        if (quillEditor) {
+            quillEditor.off('text-change', triggerAutosaveDebounce);
+            quillEditor.on('text-change', triggerAutosaveDebounce);
         }
-        if (noteType === 'document') {
-            description = document.getElementById('edit-note-document-desc').value.trim();
+
+        // Delegate listener for step changes
+        const stepsList = document.getElementById('editor-steps-list');
+        stepsList.removeEventListener('input', triggerAutosaveDebounce);
+        stepsList.addEventListener('input', triggerAutosaveDebounce);
+    }
+
+    function triggerAutosaveDebounce() {
+        const statusText = document.getElementById('editor-autosave-status');
+        statusText.innerHTML = '<span class="status-dot"></span> Saving draft...';
+        statusText.className = 'editor-autosave-status saving';
+
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(async () => {
+            await saveWordPressNote(true);
+        }, 2000);
+    }
+
+    async function saveWordPressNote(isAutosave = false, forcePublish = false) {
+        if (isSavingNote) return;
+        isSavingNote = true;
+
+        const noteId = document.getElementById('editor-note-id').value;
+        let title = document.getElementById('editor-note-title').value.trim();
+        const noteType = document.getElementById('editor-note-type').value;
+        const command = document.getElementById('editor-note-command').value.trim();
+        let description = '';
+        const categoryId = document.getElementById('editor-note-category').value;
+        const tags = document.getElementById('editor-note-tags').value.split(',').map(t => t.trim()).filter(t => t);
+        const steps = noteType === 'procedure' ? collectSteps('editor') : [];
+        const reference_links = collectReferenceLinks('editor');
+        let status = forcePublish ? 'published' : document.getElementById('editor-note-status').value;
+
+        if (noteType === 'plain') {
+            description = quillEditor ? quillEditor.root.innerHTML : '';
+        } else if (noteType === 'document') {
+            description = document.getElementById('editor-note-document-desc').value.trim();
+        } else if (noteType === 'command') {
+            description = document.getElementById('editor-note-description').value.trim();
+        }
+
+        if (!isAutosave && status === 'published') {
+            if (!title) { showToast('Title is required to publish', true); isSavingNote = false; return; }
+            if (noteType === 'command' && !command) { showToast('Command is required to publish', true); isSavingNote = false; return; }
+            if (noteType === 'procedure' && steps.length === 0) { showToast('At least one step is required to publish', true); isSavingNote = false; return; }
+            if (noteType === 'plain' && !description.replace(/<[^>]*>/g, '').trim()) { showToast('Note content is required to publish', true); isSavingNote = false; return; }
+        }
+
+        if (!title) {
+            title = "Untitled Note";
         }
 
         const body = {
             title, note_type: noteType,
             command: noteType === 'command' ? command : '',
-            description, tags,
-            steps: steps.map(s => ({ title: s.title, command: s.command, description: s.description }))
+            description, tags, status,
+            steps: steps.map(s => ({ title: s.title, command: s.command, description: s.description, blocks: s.blocks })),
+            reference_links,
+            is_autosave: isAutosave
         };
 
         if (noteType === 'document') {
-            const sourceLinkBtn = document.getElementById('edit-doc-source-link');
-            if (sourceLinkBtn && sourceLinkBtn.classList.contains('active')) {
-                const linkVal = document.getElementById('edit-note-document-link').value.trim();
-                if (!linkVal) { showToast('External Link is required', true); return; }
+            const isLink = document.getElementById('editor-doc-source-link-btn').classList.contains('active');
+            if (isLink) {
+                const linkVal = document.getElementById('editor-note-document-link').value.trim();
+                if (!isAutosave && !linkVal) { showToast('External Link is required to publish', true); isSavingNote = false; return; }
                 body.command = linkVal;
             }
-            // we don't block saving if no file is uploaded for edit, because they might just be editing the description of an existing doc.
         }
 
         if (categoryId) body.category_id = parseInt(categoryId);
 
-        const res = await apiFetch('api/notes/' + noteId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
-        if (!res) return;
-        if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to update note', true); return; }
+        const url = noteId ? 'api/notes/' + noteId : 'api/notes';
+        const method = noteId ? 'PUT' : 'POST';
 
-        // Upload any new note-level images
-        if (noteType === 'command') {
-            const previewRow = document.getElementById('edit-note-image-previews');
-            await uploadPendingImages(noteId, previewRow);
+        const res = await apiFetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
+        if (!res) { isSavingNote = false; return; }
+        
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showToast(data.message || 'Failed to save note', true);
+            isSavingNote = false;
+            return;
         }
 
-        // Upload new step images
+        const currentId = noteId || data.id;
+        document.getElementById('editor-note-id').value = currentId;
+
+        // Upload attachments
+        if (noteType === 'command' || noteType === 'document') {
+            const previewRow = noteType === 'document' ? document.getElementById('editor-note-document-previews') : document.getElementById('editor-note-image-previews');
+            await uploadPendingImages(currentId, previewRow);
+        }
+
+        // Upload step attachments
         if (noteType === 'procedure' && steps.length > 0) {
-            const noteRes2 = await apiFetch('api/notes', { headers: authHeaders() });
+            const noteRes2 = await apiFetch('api/notes/' + currentId, { headers: authHeaders() });
             if (noteRes2 && noteRes2.ok) {
-                const allN = await noteRes2.json();
-                const updatedNote = allN.find(n => n.id == noteId);
+                const updatedNote = await noteRes2.json();
                 if (updatedNote && updatedNote.steps) {
-                    const list = document.getElementById('edit-steps-list');
+                    const list = document.getElementById('editor-steps-list');
                     const cards = Array.from(list.children);
                     for (let i = 0; i < updatedNote.steps.length; i++) {
                         const serverStep = updatedNote.steps[i];
                         const card = cards[i];
                         if (!card) continue;
                         const previewRow = card.querySelector('.step-img-previews');
-                        await uploadPendingImages(noteId, previewRow, serverStep.id);
+                        await uploadPendingImages(currentId, previewRow, serverStep.id);
                     }
                 }
             }
         }
 
-        closeModal('edit-note-modal');
-        showToast('Note updated!');
-        refreshAll();
+        isSavingNote = false;
+        
+        const statusText = document.getElementById('editor-autosave-status');
+        const now = new Date().toLocaleTimeString();
+        statusText.innerHTML = `<span class="status-dot"></span> Draft saved at ${now}`;
+        statusText.className = 'editor-autosave-status saved';
+
+        if (!isAutosave) {
+            showToast(status === 'published' ? 'Note published successfully!' : 'Draft saved successfully!');
+            closeWordPressEditor();
+        } else {
+            // Update revisions panel
+            fetchEditorRevisions(currentId);
+        }
+    }
+
+    async function fetchEditorRevisions(noteId) {
+        const list = document.getElementById('editor-revisions-list');
+        try {
+            const res = await apiFetch(`api/notes/${noteId}/revisions`, { headers: authHeaders() });
+            if (res && res.ok) {
+                const revisions = await res.json();
+                if (revisions.length === 0) {
+                    list.innerHTML = '<span class="no-revisions-text">No revisions recorded yet.</span>';
+                    return;
+                }
+                list.innerHTML = revisions.map(r => {
+                    const dt = new Date(r.created_at).toLocaleString();
+                    return `
+                        <div class="revision-item" data-rev-id="${r.id}" data-note-id="${r.note_id}">
+                            <span class="revision-meta">${escapeHTML(dt)}</span>
+                            <span class="revision-meta">by <span class="revision-author">${escapeHTML(r.created_by_username || 'Unknown')}</span></span>
+                        </div>
+                    `;
+                }).join('');
+
+                // Bind click events manually to the items
+                list.querySelectorAll('.revision-item').forEach(item => {
+                    item.onclick = () => restoreEditorRevision(item.dataset.noteId, item.dataset.revId);
+                });
+            }
+        } catch(e) {
+            console.error("Failed to fetch revisions", e);
+        }
+    }
+
+    async function restoreEditorRevision(noteId, revId) {
+        if (!confirm('Are you sure you want to restore this version? Your current unsaved changes will be saved as a new revision.')) return;
+        const statusText = document.getElementById('editor-autosave-status');
+        statusText.innerHTML = '<span class="status-dot"></span> Restoring revision...';
+        statusText.className = 'editor-autosave-status saving';
+
+        const res = await apiFetch(`api/notes/${noteId}/revisions/${revId}/restore`, { method: 'POST', headers: authHeaders() });
+        if (res && res.ok) {
+            showToast('Revision restored!');
+            // Reload note into editor
+            openWordPressEditor('edit', noteId);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to restore revision', true);
+        }
+    }
+
+    function toggleEditorPreview() {
+        const previewBtn = document.getElementById('editor-preview-btn');
+        const previewOverlay = document.getElementById('editor-preview-overlay');
+        const previewContent = document.getElementById('editor-preview-content');
+
+        if (previewOverlay.style.display === 'none') {
+            // Render preview
+            const title = document.getElementById('editor-note-title').value.trim() || 'Untitled Note';
+            const noteType = document.getElementById('editor-note-type').value;
+            const command = document.getElementById('editor-note-command').value.trim();
+            const tags = document.getElementById('editor-note-tags').value.split(',').map(t => t.trim()).filter(t => t);
+            const refLinks = collectReferenceLinks('editor');
+            
+            let description = '';
+            if (noteType === 'plain') description = quillEditor ? quillEditor.root.innerHTML : '';
+            else if (noteType === 'document') description = document.getElementById('editor-note-document-desc').value.trim();
+            else if (noteType === 'command') description = document.getElementById('editor-note-description').value.trim();
+
+            let steps = [];
+            if (noteType === 'procedure') {
+                steps = collectSteps('editor');
+            }
+
+            const tagsHtml = tags.map(t => `<span class="note-tag-pill">${escapeHTML(t)}</span>`).join('');
+            const typeBadge = `<span class="note-type-badge type-${noteType}">${escapeHTML(noteType.toUpperCase())}</span>`;
+            
+            let refLinksHtml = '';
+            if (refLinks.length > 0) {
+                refLinksHtml = '<div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 8px;">' +
+                    refLinks.map(l => `<a href="${escapeHTML(l)}" target="_blank" style="font-size: 0.8rem; background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; color: var(--accent); text-decoration: none; border: 1px solid var(--border);">🔗 ${escapeHTML(l)}</a>`).join('') +
+                    '</div>';
+            }
+
+            let bodyHtml = '';
+            if (noteType === 'command') {
+                bodyHtml = `
+                    <pre class="mac-code-block" style="margin-bottom: 20px;">
+                        <div class="mac-dot mac-red"></div><div class="mac-dot mac-yellow"></div><div class="mac-dot mac-green"></div>
+                        <code class="language-bash">${escapeHTML(command)}</code>
+                    </pre>
+                    <p style="font-size:0.95rem; line-height:1.6; color:var(--text-secondary);">${escapeHTML(description)}</p>
+                `;
+            } else if (noteType === 'plain') {
+                bodyHtml = `<div class="markdown-body" style="font-size:0.95rem; line-height:1.6;">${DOMPurify.sanitize(marked.parse(description))}</div>`;
+            } else if (noteType === 'document') {
+                const isLink = document.getElementById('editor-doc-source-link-btn').classList.contains('active');
+                if (isLink) {
+                    const link = document.getElementById('editor-note-document-link').value.trim();
+                    bodyHtml = `
+                        <p style="font-size:0.95rem; color:var(--text-secondary); margin-bottom: 15px;">${escapeHTML(description)}</p>
+                        <a href="${escapeHTML(link)}" target="_blank" class="btn btn-primary btn-sm">Open External SOP Link</a>
+                    `;
+                } else {
+                    bodyHtml = `
+                        <p style="font-size:0.95rem; color:var(--text-secondary); margin-bottom: 15px;">${escapeHTML(description)}</p>
+                        <div style="padding: 20px; border: 1px dashed var(--border); border-radius: 4px; text-align: center; color: var(--text-muted);">
+                            [ Document File Attached ]
+                        </div>
+                    `;
+                }
+            } else if (noteType === 'procedure') {
+                bodyHtml = steps.map((step, si) => `
+                    <div style="margin-top: 15px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary);">
+                        <h4 style="margin: 0 0 10px 0;">Step ${si + 1}: ${escapeHTML(step.title)}</h4>
+                        ${step.blocks.map(block => {
+                            if (block.type === 'desc') return `<p style="font-size: 0.9rem; line-height: 1.5; margin-bottom: 8px;">${escapeHTML(block.content)}</p>`;
+                            if (block.type === 'code') return `<pre class="mac-code-block" style="margin-bottom: 8px;"><div class="mac-dot mac-red"></div><div class="mac-dot mac-yellow"></div><div class="mac-dot mac-green"></div><code>${escapeHTML(block.content)}</code></pre>`;
+                            if (block.type === 'image') return `<div class="procedure-step-image" style="max-width: 100%; margin-bottom: 8px;"><img src="${escapeHTML(block.content)}" style="max-width: 100%; max-height: 300px; border-radius: 4px;"></div>`;
+                            return '';
+                        }).join('')}
+                    </div>
+                `).join('');
+            }
+
+            previewContent.innerHTML = `
+                <div style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
+                    ${typeBadge}
+                </div>
+                <h2 style="font-size: 1.8rem; margin: 0 0 15px 0;">${escapeHTML(title)}</h2>
+                <div style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">${tagsHtml}</div>
+                <div style="margin-bottom: 25px;">${bodyHtml}</div>
+                ${refLinksHtml}
+            `;
+
+            previewOverlay.style.display = 'block';
+            previewBtn.textContent = 'Edit Mode';
+        } else {
+            previewOverlay.style.display = 'none';
+            previewBtn.textContent = 'Preview';
+        }
     }
 
     // ─── DELETE NOTE ─────────────────────────────────────
@@ -1323,7 +2014,13 @@
                 </td>
                 <td>
                     <div style="display:flex; gap:8px; align-items:center;">
-                        ${(!isSelf && u.role !== 'admin') ? `<button class="btn-icon user-role-btn" data-user-id="${u.id}" data-current-role="${u.role}" title="${u.role === 'author' ? 'Make Moderator' : 'Make Author'}" style="color:var(--accent);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>` : ''}
+                        ${!isSelf ? `
+                        <select class="user-role-select" data-user-id="${u.id}" data-current-role="${u.role}" style="padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.75rem;">
+                            <option value="author" ${u.role === 'author' ? 'selected' : ''}>Author</option>
+                            <option value="moderator" ${u.role === 'moderator' ? 'selected' : ''}>Moderator</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                        ` : ''}
                         ${(!isSelf && !isAD) ? `<button class="btn-icon user-reset-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" title="Reset Password" style="color:var(--success);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></button>` : ''}
                         ${!isSelf ? `<button class="btn-icon btn-icon-danger user-delete-btn" data-user-id="${u.id}">${ICONS.trash}</button>` : ''}
                     </div>
@@ -1394,17 +2091,27 @@
             });
         });
 
-        tbody.querySelectorAll('.user-role-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const newRole = btn.dataset.currentRole === 'author' ? 'moderator' : 'author';
-                if (!confirm(`Change user role to ${newRole}?`)) return;
-                const res = await apiFetch('api/users/' + btn.dataset.userId + '/role', { 
+        tbody.querySelectorAll('.user-role-select').forEach(select => {
+            select.addEventListener('change', async (e) => {
+                const newRole = e.target.value;
+                const oldRole = select.dataset.currentRole;
+                if (!confirm(`Change user role to ${newRole}?`)) {
+                    e.target.value = oldRole; // revert
+                    return;
+                }
+                const res = await apiFetch('api/users/' + select.dataset.userId + '/role', { 
                     method: 'PUT', 
                     headers: authHeaders(),
                     body: JSON.stringify({ role: newRole })
                 });
-                if (res && res.ok) { showToast('User role updated.'); loadAdminUsers(); }
-                else { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to update user role', true); }
+                if (res && res.ok) { 
+                    showToast('User role updated.'); 
+                    loadAdminUsers(); 
+                } else { 
+                    const err = await res.json().catch(() => ({})); 
+                    showToast(err.message || 'Failed to update user role', true);
+                    e.target.value = oldRole; // revert
+                }
             });
         });
     }
@@ -1634,6 +2341,7 @@
         if (typeof Quill !== 'undefined') {
             quillAdd = new Quill('#add-note-plain', quillOptions);
             quillEdit = new Quill('#edit-note-plain', quillOptions);
+            quillEditor = new Quill('#editor-plain-quill-container', quillOptions);
         }
 
         initTheme();
@@ -1651,6 +2359,7 @@
         // Image uploads (note-level, command type)
         initNoteImageUpload('add');
         initNoteImageUpload('edit');
+        initNoteImageUpload('editor');
 
         // Theme
         document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
@@ -1670,16 +2379,87 @@
         document.getElementById('logout-btn').addEventListener('click', doLogout);
 
         // Notes
+        const notesContainer = document.getElementById('notes-container');
+        if (notesContainer) {
+            notesContainer.addEventListener('click', (e) => {
+                // Copy Code
+                const copyBtn = e.target.closest('.note-copy-btn');
+                if (copyBtn) {
+                    const code = copyBtn.closest('.note-code-block').querySelector('code').textContent;
+                    copyToClipboard(code, copyBtn);
+                    return;
+                }
+                
+                // Copy Path (UNC)
+                const copyPathBtn = e.target.closest('.copy-path-btn');
+                if (copyPathBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    copyToClipboard(copyPathBtn.dataset.path, copyPathBtn);
+                    return;
+                }
+
+                // Edit Note
+                const editBtn = e.target.closest('.note-edit-btn');
+                if (editBtn) {
+                    openWordPressEditor('edit', editBtn.dataset.id);
+                    return;
+                }
+
+                // Delete Note
+                const delBtn = e.target.closest('.note-delete-btn');
+                if (delBtn) {
+                    deleteNote(delBtn.dataset.id);
+                    return;
+                }
+
+                // Inline Image Lightbox
+                const inlineImg = e.target.closest('.note-inline-image');
+                if (inlineImg) {
+                    openLightbox(inlineImg.dataset.src);
+                    return;
+                }
+                
+                const stepImg = e.target.closest('.procedure-step-image');
+                if (stepImg) {
+                    openLightbox(stepImg.dataset.src);
+                    return;
+                }
+            });
+        }
+        
         document.getElementById('add-note-btn').addEventListener('click', () => {
-            resetAddForm();
-            openModal('add-note-modal');
+            openWordPressEditor('add');
         });
-        document.getElementById('add-note-form').addEventListener('submit', handleAddNote);
-        document.getElementById('edit-note-form').addEventListener('submit', handleEditNote);
+
+        // WordPress Editor Button Click listeners
+        document.getElementById('editor-back-btn').addEventListener('click', closeWordPressEditor);
+        document.getElementById('editor-preview-btn').addEventListener('click', toggleEditorPreview);
+        document.getElementById('editor-save-draft-btn').addEventListener('click', () => saveWordPressNote(false, false));
+        document.getElementById('editor-publish-btn').addEventListener('click', () => saveWordPressNote(false, true));
+        document.getElementById('editor-add-step-btn').addEventListener('click', () => addStep('editor'));
+        document.getElementById('editor-add-ref-link-btn').addEventListener('click', () => addReferenceLinkInput('editor'));
+
+        // Note format buttons
+        document.getElementById('editor-type-command-btn').addEventListener('click', () => setEditorNoteType('command'));
+        document.getElementById('editor-type-procedure-btn').addEventListener('click', () => setEditorNoteType('procedure'));
+        document.getElementById('editor-type-plain-btn').addEventListener('click', () => setEditorNoteType('plain'));
+        document.getElementById('editor-type-document-btn').addEventListener('click', () => setEditorNoteType('document'));
+
+        // Doc source buttons
+        document.getElementById('editor-doc-source-file-btn').addEventListener('click', () => toggleEditorDocSource('file'));
+        document.getElementById('editor-doc-source-link-btn').addEventListener('click', () => toggleEditorDocSource('link'));
 
         // Step add buttons
         document.getElementById('add-step-btn').addEventListener('click', () => addStep('add'));
         document.getElementById('edit-step-btn').addEventListener('click', () => addStep('edit'));
+
+        // Reference link add buttons
+        const addRefBtn = document.getElementById('add-reference-link-btn');
+        if (addRefBtn) addRefBtn.addEventListener('click', () => addReferenceLinkInput('add'));
+        
+        const editRefBtn = document.getElementById('edit-reference-link-btn');
+        if (editRefBtn) editRefBtn.addEventListener('click', () => addReferenceLinkInput('edit'));
 
         // Admin page
         document.getElementById('admin-btn').addEventListener('click', openAdminPage);
@@ -1791,6 +2571,7 @@
                     if (!anyModalOpen) {
                         fetchNotes();
                         updatePendingCount();
+                        updateDraftCount();
                     }
                 }
                 lastUpdateTimestamp = data.last_update;

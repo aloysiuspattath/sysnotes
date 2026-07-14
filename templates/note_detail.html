@@ -7,6 +7,11 @@
     <base href="{{ base_url }}">
     <meta name="description" content="Sysadmin note detail view">
     <script src="static/vendor/purify.min.js"></script>
+    <script src="static/vendor/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="static/vendor/quill/quill.snow.css">
     <style>
         /* ── Reset & tokens ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,10 +36,17 @@
             --r: 10px;
             --r-lg: 14px;
             --r-full: 9999px;
-            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f8fafc;
+            --text-secondary: #4b5563;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             --mono: 'SF Mono','Cascadia Code','Fira Code',Consolas,monospace;
         }
-                [data-theme="dark"] {
+        [data-theme="dark"] {
             --bg: #0a0a0f;
             --surface: #14141d;
             --border: #27272a;
@@ -51,6 +63,14 @@
             --code-text: #4ade80;
             --shadow: 0 4px 20px rgba(0,0,0,0.4);
             --shadow-lg: 0 12px 30px rgba(0,0,0,0.5);
+            --bg-secondary: #14141d;
+            --bg-tertiary: #0e0e15;
+            --text-secondary: #a1a1aa;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-heading);
+            font-weight: 600;
         }
 
         body {
@@ -360,9 +380,10 @@
         .step-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: var(--r-lg);
+            border-left: 4px solid var(--green); /* Premium emerald procedure brand accent */
+            border-radius: var(--radius-md);
             overflow: hidden;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             box-shadow: var(--shadow);
             animation: fadeUp 0.35s ease backwards;
         }
@@ -381,17 +402,16 @@
             border-bottom: 1px solid var(--border);
         }
 
-        .step-num {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 30px; height: 30px;
-            border-radius: 50%;
+        .step-badge-pill {
+            font-size: 0.72rem;
+            font-weight: 700;
             background: var(--green-s);
-            border: 1.5px solid var(--green-b);
+            border: 1px solid var(--green-b);
             color: var(--green);
-            font-size: 0.8rem;
-            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             flex-shrink: 0;
         }
 
@@ -512,6 +532,353 @@
             .note-title { font-size: 1.3rem; }
             .topbar { padding: 0 16px; }
             pre.code-body, pre.step-code { font-size: 0.78rem; }
+            .note-header-card {
+                padding: 16px 20px;
+            }
+            .step-header {
+                padding: 10px 14px;
+            }
+            .step-body {
+                padding: 12px 14px;
+            }
+        }
+        /* ── macOS Code Block ───────────────────────────── */
+        .note-command-wrapper {
+            position: relative;
+            margin-top: 4px;
+        }
+
+        .note-code-block {
+            position: relative;
+            border-radius: var(--r-lg);
+            background: #1e1e1e; /* Terminal Dark */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .note-code-block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #252526 !important; /* VS Code dark header */
+            padding: 8px 14px !important;
+            border-bottom: 1px solid #1a1a1a !important;
+            user-select: none;
+        }
+
+        .terminal-dots {
+            display: flex !important;
+            gap: 6px !important;
+            align-items: center !important;
+        }
+
+        .terminal-dots .dot {
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 50% !important;
+            display: inline-block !important;
+        }
+
+        .terminal-dots .dot.red { background: #ff5f56 !important; }
+        .terminal-dots .dot.yellow { background: #ffbd2e !important; }
+        .terminal-dots .dot.green { background: #27c93f !important; }
+
+        .terminal-title {
+            font-family: var(--mono) !important;
+            font-size: 0.72rem !important;
+            color: rgba(255, 255, 255, 0.7) !important;
+            font-weight: 600 !important;
+            text-transform: lowercase !important;
+            letter-spacing: 0.3px !important;
+        }
+
+        .note-code {
+            margin: 0;
+            padding: 14px 52px 14px 14px;
+            background: transparent;
+            color: #a6e22e; /* Terminal Green/Yellow */
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .note-copy-btn {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            padding: 3px 8px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: var(--radius-sm);
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-family: var(--font);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+            letter-spacing: 0.2px;
+            z-index: 10;
+        }
+
+        .note-copy-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .note-copy-btn.copied {
+            color: #6ee7b7;
+            border-color: rgba(52, 211, 153, 0.4);
+            background: rgba(52, 211, 153, 0.12);
+        }
+
+        /* Rich Note Blockquotes & Code Snippet styling */
+        .ql-editor blockquote,
+        .markdown-body blockquote,
+        .note-description blockquote {
+            border-left: 4px solid var(--accent) !important;
+            padding-left: 16px !important;
+            margin: 1.2em 0 !important;
+            color: var(--text-secondary) !important;
+            font-style: italic !important;
+            background: var(--bg-primary) !important;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
+        }
+
+        .ql-editor pre.ql-syntax,
+        .markdown-body pre.ql-syntax,
+        .note-description pre.ql-syntax {
+            background: #141414 !important;
+            color: #a6e22e !important;
+            font-family: var(--font-mono) !important;
+            font-size: 0.88rem !important;
+            padding: 12px 16px !important;
+            border-radius: var(--radius-md) !important;
+            border: 1px solid var(--border) !important;
+            margin: 1.2em 0 !important;
+            overflow-x: auto !important;
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
+        }
+
+        /* Quill Code Block container & line styling */
+        .ql-code-block-container,
+        .ql-editor .ql-code-block-container,
+        .markdown-body .ql-code-block-container,
+        .note-description .ql-code-block-container {
+            background: #141414 !important;
+            color: #a6e22e !important;
+            font-family: var(--font-mono) !important;
+            font-size: 0.88rem !important;
+            padding: 12px 16px !important;
+            border-radius: var(--radius-md) !important;
+            border: 1px solid var(--border) !important;
+            margin: 1.2em 0 !important;
+            overflow-x: auto !important;
+            white-space: pre !important;
+        }
+
+        .ql-code-block,
+        .ql-editor .ql-code-block,
+        .markdown-body .ql-code-block,
+        .note-description .ql-code-block {
+            font-family: var(--font-mono) !important;
+            white-space: pre !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: none !important;
+            border: none !important;
+            color: #a6e22e !important;
+        }
+
+        /* Merge consecutive blockquotes */
+        .ql-editor blockquote + blockquote,
+        .markdown-body blockquote + blockquote,
+        .note-description blockquote + blockquote {
+            margin-top: -1em !important;
+        }
+
+        /* Bento Grid Layout for Note Detail */
+        .note-detail-grid {
+            display: flex;
+            gap: 28px;
+            align-items: flex-start;
+            width: 100%;
+        }
+
+        .note-detail-main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .note-detail-sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: sticky;
+            top: 86px;
+        }
+
+        /* Bento Widgets styling */
+        .bento-widget {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .bento-widget-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-2);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .bento-meta-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .bento-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .bento-meta-label {
+            font-weight: 600;
+            color: var(--text-2);
+            width: 90px;
+            flex-shrink: 0;
+        }
+
+        .bento-tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 14px;
+        }
+
+        .bento-tag-pill {
+            font-size: 0.78rem;
+            background: var(--accent-s);
+            color: var(--accent);
+            border: 1px solid var(--accent-b);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+        }
+
+        .bento-step-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .bento-step-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+
+        .bento-step-link:hover {
+            background: var(--accent-s);
+            color: var(--accent);
+            border-color: var(--accent-b);
+        }
+
+        .bento-step-link .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-2);
+        }
+
+        .bento-step-link:hover .num {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .bento-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-2);
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .bento-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-s);
+        }
+
+        @media (max-width: 900px) {
+            .note-detail-grid {
+                flex-direction: column;
+            }
+            .note-detail-sidebar {
+                width: 100%;
+                position: static;
+            }
         }
     </style>
 </head>
@@ -540,6 +907,11 @@
     (function() {
         'use strict';
 
+        const ICONS = {
+            copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+            check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+        };
+
         // ── Theme ────────────────────────────────────────
         const saved = localStorage.getItem('sn_theme') || 'dark';
         document.documentElement.setAttribute('data-theme', saved);
@@ -559,16 +931,28 @@
             return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
+        function detectLanguage(code) {
+            if (!code) return 'terminal';
+            const clean = code.trim().toLowerCase();
+            if (clean.includes('select ') || clean.includes('insert ') || clean.includes('update ') || clean.includes('create table')) return 'sql';
+            if (clean.includes('get-') || clean.includes('set-') || clean.includes('new-') || clean.includes('write-host') || clean.includes('$confirm') || clean.includes('$args')) return 'powershell';
+            if (clean.startsWith('apt-get') || clean.startsWith('sudo') || clean.startsWith('docker') || clean.startsWith('git') || clean.startsWith('npm') || clean.startsWith('pip') || clean.startsWith('curl')) return 'bash';
+            if (clean.startsWith('{') && clean.endsWith('}')) return 'json';
+            if (clean.includes(':') && (clean.includes('version:') || clean.includes('services:'))) return 'yaml';
+            return 'terminal';
+        }
+
         function autolink(text) {
             if (!text) return '';
             const escaped = esc(text);
             const urlPattern = /((?:https?|ftp):\/\/[^\s<]+)/g;
             let result = escaped.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
             
-            const uncPattern = /(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
-            result = result.replace(uncPattern, function(match) {
-                const cleanPath = match.replace(/\\/g, '/');
-                return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${match}</a> <button type="button" class="btn btn-outline btn-xs copy-path-btn" data-path="${esc(match)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
+            const uncPattern = /"(\\\\[^"\n]+)"|'(\\\\[^'\n]+)'|(\\\\[a-zA-Z0-9_.-]+\\[^\s<]+)/g;
+            result = result.replace(uncPattern, function(match, g1, g2, g3) {
+                const path = g1 || g2 || g3;
+                const cleanPath = path.replace(/\\/g, '/');
+                return `<a href="file:///${cleanPath}" target="_blank" rel="noopener noreferrer">${path}</a> <button type="button" class="btn btn-outline btn-xs copy-path-btn" data-path="${esc(path)}" style="display:inline-flex; padding:2px 6px; font-size:10px; margin-left:5px; height:auto; line-height:1; vertical-align:middle;">Copy Path</button>`;
             });
             return result;
         }
@@ -577,7 +961,7 @@
             const orig = btn.innerHTML;
             
             const success = () => {
-                btn.innerHTML = '✓';
+                btn.innerHTML = ICONS.check;
                 btn.classList.add('copied');
                 setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); }, 2000);
             };
@@ -602,7 +986,7 @@
         }
 
         function isDocumentUrl(url) {
-            return /\.(pdf|doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(url);
+            return /\.(pdf|doc|docx|txt|md|csv|xlsx)(\?.*)?$/i.test(url);
         }
 
         function getDocumentThumb(url, name) {
@@ -616,13 +1000,13 @@
             if (/\.(csv)(\?.*)?$/i.test(url) || /\.(csv)$/i.test(name)) {
                 icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 15h8M8 11h8"></path></svg>';
             }
-            if (/\.(txt)(\?.*)?$/i.test(url) || /\.(txt)$/i.test(name)) {
+            if (/\.(txt|md)(\?.*)?$/i.test(url) || /\.(txt|md)$/i.test(name)) {
                 icon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
             }
             return `<div class="doc-thumb" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--bg-tertiary); color:var(--text); padding:10px; text-align:center; word-break:break-all;"><div style="margin-bottom:8px;">${icon}</div><span style="font-size:10px; line-height:1.2;">${esc(name||'Document')}</span></div>`;
         }
 
-        function openLightbox(src) {
+        async function openLightbox(src) {
             if (/\.(doc|docx|txt|csv|xlsx)(\?.*)?$/i.test(src)) {
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
@@ -633,14 +1017,26 @@
             }
             const box = document.createElement('div');
             box.className = 'lightbox';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
+            closeBtn.onclick = () => box.remove();
+
             if (/\.pdf(\?.*)?$/i.test(src)) {
                 box.innerHTML = `<object data="${esc(src)}" type="application/pdf" style="width:80%; height:85vh; border:none; background:white; border-radius:var(--radius-md); box-shadow:0 4px 12px rgba(0,0,0,0.5);"><p>Your browser does not support PDFs. <a href="${esc(src)}">Download the PDF</a>.</p></object>`;
-                // Add a small close button specifically for PDF
-                const closeBtn = document.createElement('button');
-                closeBtn.innerHTML = '×';
-                closeBtn.style.cssText = 'position:absolute; top:10px; right:10px; background:var(--bg); border:none; color:var(--text); font-size:24px; cursor:pointer; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.2); z-index:1001;';
-                closeBtn.onclick = () => box.remove();
                 box.appendChild(closeBtn);
+            } else if (/\.md(\?.*)?$/i.test(src)) {
+                try {
+                    const res = await fetch(src);
+                    const text = await res.text();
+                    const html = DOMPurify.sanitize(marked.parse(text));
+                    box.innerHTML = `<div style="width:80%; max-width:800px; max-height:85vh; overflow-y:auto; background:var(--bg); color:var(--text); border-radius:var(--radius-md); padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.5); text-align:left;" class="md-preview-content">${html}</div>`;
+                    box.appendChild(closeBtn);
+                } catch (err) {
+                    box.innerHTML = `<div style="background:var(--bg); padding:20px; border-radius:8px; color:var(--text-danger);">Failed to load markdown file.</div>`;
+                    box.appendChild(closeBtn);
+                }
             } else {
                 box.innerHTML = `<img src="${esc(src)}" alt="">`;
                 box.addEventListener('click', () => box.remove());
@@ -678,7 +1074,7 @@
             let badgeType = 'command';
             let badgeText = 'Command';
             if (isProcedure) { badgeType = 'procedure'; badgeText = 'Procedure'; }
-            if (isPlain) { badgeType = 'procedure'; badgeText = 'Plain Note'; }
+            if (isPlain) { badgeType = 'procedure'; badgeText = 'Rich Note'; }
             if (isDocument) { badgeType = 'procedure'; badgeText = 'DOCS / SOP'; }
 
             let pendingBadge = '';
@@ -692,14 +1088,30 @@
             if (note.description) {
                 if (isPlain) {
                     let sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(note.description) : esc(note.description);
-                    descHtml = `<div class="note-description markdown-body" style="color:var(--text); white-space: normal;">${sanitized}</div>`;
+                    descHtml = `<div class="note-description ql-editor markdown-body" style="color:var(--text); white-space: normal; padding: 0 !important; min-height: auto;">${sanitized}</div>`;
                 } else {
-                    descHtml = `<p class="note-description">${autolink(note.description)}</p>`;
+                    let parsedDesc = (typeof DOMPurify !== 'undefined' && typeof marked !== 'undefined') ? DOMPurify.sanitize(marked.parse(note.description)) : autolink(note.description);
+                    descHtml = `<div class="note-description markdown-body" style="white-space: normal;">${parsedDesc}</div>`;
                 }
             }
 
+            let refLinksHtml = '';
+            if (note.reference_links) {
+                try {
+                    const links = typeof note.reference_links === 'string' ? JSON.parse(note.reference_links) : note.reference_links;
+                    if (links && links.length > 0) {
+                        refLinksHtml = '<div class="note-reference-links" style="margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px;">' +
+                            links.map(l => `<a href="${esc(l)}" target="_blank" style="font-size: 0.85rem; background: var(--bg-tertiary); padding: 6px 12px; border-radius: 6px; color: var(--accent); text-decoration: none; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px;">🔗 ${esc(l)}</a>`).join('') +
+                            '</div>';
+                    }
+                } catch(e) {}
+            }
+
+            // Let's build the left column (main) HTML first:
+            let mainHtml = '';
+            
             // Header card
-            html += `<div class="note-header-card ${isProcedure ? 'is-procedure' : ''}">
+            mainHtml += `<div class="note-header-card ${isProcedure ? 'is-procedure' : ''}">
                 <div style="display: flex; align-items: center; flex-wrap: wrap;">
                     <div class="note-type-badge ${badgeType}">
                         <span class="dot"></span>
@@ -709,26 +1121,32 @@
                 </div>
                 <h1 class="note-title">${esc(note.title)}</h1>
                 ${descHtml}
-                <div class="note-meta-row">
-                    ${note.category_name ? `<span class="meta-badge category">📁 ${esc(note.category_name)}</span>` : ''}
-                    ${tags.map(t => `<span class="meta-badge tag">#${esc(t)}</span>`).join('')}
-                    <span class="meta-badge author">👤 ${esc(note.created_by_username || 'Unknown')}</span>
-                </div>
+                ${refLinksHtml}
             </div>`;
 
             if (!isProcedure && !isDocument && note.command) {
                 // Single command block
-                html += `<div class="command-block">
-                    <div class="command-block-label">
-                        <span>Command</span>
-                        <button class="copy-btn" id="main-copy-btn">⎘</button>
+                const lang = detectLanguage(note.command);
+                mainHtml += `<div class="note-command-wrapper" style="margin-bottom: 24px;">
+                    <div class="note-code-block">
+                        <div class="terminal-header">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="terminal-dots">
+                                    <span class="dot red"></span>
+                                    <span class="dot yellow"></span>
+                                    <span class="dot green"></span>
+                                </div>
+                                <span class="terminal-title">${lang}</span>
+                            </div>
+                        </div>
+                        <pre class="note-code"><code id="main-code">${esc(note.command)}</code></pre>
+                        <button class="note-copy-btn" id="main-copy-btn" title="Copy to clipboard">${ICONS.copy}</button>
                     </div>
-                    <pre class="code-body"><code id="main-code">${esc(note.command)}</code></pre>
                 </div>`;
             }
 
             if (isDocument && note.command) {
-                html += `<div class="note-images-section">
+                mainHtml += `<div class="note-images-section">
                     <div class="steps-title" style="margin-bottom:10px;">External Link / Network Path</div>
                     <div class="note-doc-preview" style="background-color: var(--bg-tertiary); padding: 15px; border:1px solid var(--border); border-radius: var(--radius-md); display:flex; align-items:center; gap:15px;">
                         <div class="note-doc-icon">
@@ -751,7 +1169,7 @@
 
             // Note-level images
             if (images.length) {
-                html += `<div class="note-images-section">
+                mainHtml += `<div class="note-images-section">
                     <div class="steps-title">Attachments</div>
                     <div class="note-images-grid">
                         ${images.map(img => {
@@ -768,25 +1186,65 @@
 
             // Procedure steps
             if (isProcedure && steps.length) {
-                html += `<div class="steps-section">
+                mainHtml += `<div class="steps-section">
                     <div class="steps-title">${steps.length} Step${steps.length !== 1 ? 's' : ''}</div>`;
                 steps.forEach((step, i) => {
                     const stepImgs = step.images || [];
-                    html += `<div class="step-card" style="animation-delay:${i * 0.07}s">
+                    mainHtml += `<div class="step-card" id="step-${i + 1}" style="animation-delay:${i * 0.07}s">
                         <div class="step-header">
-                            <div class="step-num">${i + 1}</div>
-                            <div class="step-title">${esc(step.title || 'Step ' + (i + 1))}</div>
+                            <span class="step-badge-pill">Step ${i + 1}</span>
+                            <div class="step-title" style="margin-left: 10px;">${esc(step.title || 'Instructions')}</div>
                         </div>
                         <div class="step-body">
-                            ${step.description ? `<p class="step-desc">${autolink(step.description)}</p>` : ''}
-                            ${step.command ? `
-                                <div class="step-command">
-                                    <div class="step-command-header">
-                                        <span>Command</span>
-                                        <button class="copy-btn step-copy-btn">⎘</button>
-                                    </div>
-                                    <pre class="step-code"><code>${esc(step.command)}</code></pre>
-                                </div>` : ''}
+                            ${step.blocks && step.blocks.length > 0 ? step.blocks.map(block => {
+                                if (block.type === 'desc') {
+                                    return `<p class="step-desc">${autolink(block.content)}</p>`;
+                                } else if (block.type === 'code') {
+                                    const lang = detectLanguage(block.content);
+                                    return `
+                                        <div class="note-command-wrapper" style="margin-bottom: 12px;">
+                                            <div class="note-code-block">
+                                                <div class="terminal-header">
+                                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                                        <div class="terminal-dots">
+                                                            <span class="dot red"></span>
+                                                            <span class="dot yellow"></span>
+                                                            <span class="dot green"></span>
+                                                        </div>
+                                                        <span class="terminal-title">${lang}</span>
+                                                    </div>
+                                                </div>
+                                                <pre class="note-code"><code>${esc(block.content)}</code></pre>
+                                                <button class="note-copy-btn step-copy-btn" title="Copy to clipboard">${ICONS.copy}</button>
+                                            </div>
+                                        </div>`;
+                                } else if (block.type === 'image') {
+                                    return `
+                                        <div class="step-image-block" style="margin-bottom: 12px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); text-align: center; background: var(--surface);">
+                                            <img src="${esc(block.content)}" alt="Step Image" style="max-width: 100%; max-height: 400px; display: inline-block; cursor: zoom-in;" onclick="openLightbox(this.src)">
+                                        </div>`;
+                                }
+                                return '';
+                            }).join('') : `
+                                ${step.description ? `<p class="step-desc">${autolink(step.description)}</p>` : ''}
+                                ${step.command ? `
+                                    <div class="note-command-wrapper" style="margin-bottom: 12px;">
+                                        <div class="note-code-block">
+                                            <div class="terminal-header">
+                                                <div style="display: flex; align-items: center; gap: 10px;">
+                                                    <div class="terminal-dots">
+                                                        <span class="dot red"></span>
+                                                        <span class="dot yellow"></span>
+                                                        <span class="dot green"></span>
+                                                    </div>
+                                                    <span class="terminal-title">${detectLanguage(step.command)}</span>
+                                                </div>
+                                            </div>
+                                            <pre class="note-code"><code>${esc(step.command)}</code></pre>
+                                            <button class="note-copy-btn step-copy-btn" title="Copy to clipboard">${ICONS.copy}</button>
+                                        </div>
+                                    </div>` : ''}
+                            `}
                             ${stepImgs.length ? `
                                 <div class="step-images">
                                     ${stepImgs.map(img => {
@@ -801,12 +1259,120 @@
                         </div>
                     </div>`;
                 });
-                html += `</div>`;
+                mainHtml += `</div>`;
             }
 
-            html += `<div id="note-audit-section" style="margin-top:40px;"></div>`;
+            mainHtml += `<div id="note-audit-section" style="margin-top:40px;"></div>`;
+
+            // Let's build the right column (sidebar) HTML:
+            let sidebarHtml = '';
+            
+            let createdDate = 'N/A';
+            if (note.created_at) {
+                try {
+                    const dateStr = String(note.created_at).replace(/-/g, '/').replace('T', ' ').split('.')[0];
+                    createdDate = new Date(dateStr).toLocaleDateString();
+                    if (createdDate === 'Invalid Date' || isNaN(new Date(dateStr))) {
+                        createdDate = new Date(note.created_at).toLocaleDateString();
+                    }
+                } catch (e) {
+                    createdDate = 'N/A';
+                }
+            }
+            const categoryName = note.category_name ? esc(note.category_name) : 'Uncategorized';
+            
+            sidebarHtml += `<div class="bento-widget">
+                <div class="bento-widget-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    Note Details
+                </div>
+                <ul class="bento-meta-list">
+                    <li class="bento-meta-item">
+                        <span class="bento-meta-label">📁 Category:</span>
+                        <span>${categoryName}</span>
+                    </li>
+                    <li class="bento-meta-item">
+                        <span class="bento-meta-label">👤 Author:</span>
+                        <span>${esc(note.created_by_username || 'Unknown')}</span>
+                    </li>
+                    <li class="bento-meta-item">
+                        <span class="bento-meta-label">📅 Created:</span>
+                        <span>${createdDate}</span>
+                    </li>
+                </ul>`;
+            
+            if (tags && tags.length > 0) {
+                sidebarHtml += `<div class="bento-tag-list">
+                    ${tags.map(t => `<span class="bento-tag-pill">#${esc(t)}</span>`).join('')}
+                </div>`;
+            }
+            
+            sidebarHtml += `</div>`;
+            
+            sidebarHtml += `<div class="bento-widget">
+                <div class="bento-widget-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    Actions
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="bento-btn" id="bento-copy-url">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        Copy Share Link
+                    </button>
+                    <button class="bento-btn" onclick="window.print()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                        Print / Save PDF
+                    </button>
+                </div>
+            </div>`;
+            
+            if (isProcedure && steps.length > 0) {
+                sidebarHtml += `<div class="bento-widget">
+                    <div class="bento-widget-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        Runbook Steps
+                    </div>
+                    <ul class="bento-step-list">
+                        ${steps.map((s, idx) => `
+                            <li>
+                                <a href="note/${noteId}#step-${idx + 1}" class="bento-step-link" onclick="document.getElementById('step-${idx + 1}').scrollIntoView({behavior: 'smooth'}); return false;">
+                                    <span class="num">${idx + 1}</span>
+                                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px;">${esc(s.title || 'Step ' + (idx + 1))}</span>
+                                </a>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>`;
+            }
+
+            // Unify into Bento grid
+            html = `<div class="note-detail-grid">
+                <div class="note-detail-main">
+                    ${mainHtml}
+                </div>
+                <div class="note-detail-sidebar">
+                    ${sidebarHtml}
+                </div>
+            </div>`;
+
             const container = document.getElementById('page-content');
             container.innerHTML = html;
+
+            // Wire copy URL button
+            const copyUrlBtn = document.getElementById('bento-copy-url');
+            if (copyUrlBtn) {
+                copyUrlBtn.addEventListener('click', () => {
+                    const orig = copyUrlBtn.innerHTML;
+                    navigator.clipboard.writeText(window.location.href)
+                        .then(() => {
+                            copyUrlBtn.innerHTML = ICONS.check + ' Link Copied!';
+                            setTimeout(() => { copyUrlBtn.innerHTML = orig; }, 2000);
+                        })
+                        .catch(err => {
+                            console.error("Failed to copy URL", err);
+                        });
+                });
+            }
 
             // Wire copy buttons
             const mainCopy = document.getElementById('main-copy-btn');
@@ -817,7 +1383,7 @@
             }
             container.querySelectorAll('.step-copy-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const code = btn.closest('.step-command').querySelector('code').textContent;
+                    const code = btn.closest('.note-code-block').querySelector('code').textContent;
                     copyText(code, btn);
                 });
             });

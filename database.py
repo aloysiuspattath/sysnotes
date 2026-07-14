@@ -7,8 +7,10 @@ UPLOADS_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads'
 
 def get_db():
     """Return a fresh database connection with Row factory enabled."""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
@@ -32,9 +34,19 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'author',
             auth_type TEXT DEFAULT 'ad',
+            failed_attempts INTEGER DEFAULT 0,
+            locked_until DATETIME,
             UNIQUE(username, auth_type)
         )
     ''')
+
+    # Migration: add failed_attempts/locked_until columns if missing (for existing databases)
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = [col[1] for col in cursor.fetchall()]
+    if 'failed_attempts' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
+    if 'locked_until' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN locked_until DATETIME")
 
     # Settings table
     cursor.execute('''
@@ -72,18 +84,50 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             created_by INTEGER,
+            reference_links TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'published',
             FOREIGN KEY (category_id) REFERENCES categories(id),
             FOREIGN KEY (created_by) REFERENCES users(id)
         )
     ''')
 
-    # Migration: add note_type/approved columns if missing
+    # Migration: add note_type/approved/status columns if missing
     cursor.execute("PRAGMA table_info(notes)")
     note_cols = [col[1] for col in cursor.fetchall()]
     if 'note_type' not in note_cols:
         cursor.execute("ALTER TABLE notes ADD COLUMN note_type TEXT DEFAULT 'command'")
     if 'approved' not in note_cols:
         cursor.execute("ALTER TABLE notes ADD COLUMN approved INTEGER DEFAULT 1")
+    if 'status' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'published'")
+    if 'reference_links' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN reference_links TEXT DEFAULT '[]'")
+
+    # Revisions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS note_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            command TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            note_type TEXT DEFAULT 'command',
+            category_id INTEGER,
+            reference_links TEXT DEFAULT '[]',
+            steps TEXT DEFAULT '[]',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Migration: add reference_links/steps columns to note_revisions if missing
+    cursor.execute("PRAGMA table_info(note_revisions)")
+    rev_cols = [col[1] for col in cursor.fetchall()]
+    if 'reference_links' not in rev_cols:
+        cursor.execute("ALTER TABLE note_revisions ADD COLUMN reference_links TEXT DEFAULT '[]'")
+    if 'steps' not in rev_cols:
+        cursor.execute("ALTER TABLE note_revisions ADD COLUMN steps TEXT DEFAULT '[]'")
 
     # Migration: update existing 'user' roles to 'author'
     cursor.execute("UPDATE users SET role = 'author' WHERE role = 'user'")
@@ -97,9 +141,16 @@ def init_db():
             title TEXT,
             command TEXT,
             description TEXT,
+            blocks TEXT,
             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         )
     ''')
+
+    # Migration: add blocks column to note_steps if missing
+    cursor.execute("PRAGMA table_info(note_steps)")
+    step_cols = [col[1] for col in cursor.fetchall()]
+    if 'blocks' not in step_cols:
+        cursor.execute("ALTER TABLE note_steps ADD COLUMN blocks TEXT")
 
     # Note Images table
     cursor.execute('''
@@ -131,6 +182,34 @@ def init_db():
             PRIMARY KEY (note_id, tag_id),
             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
             FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Performance Indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_steps_note_id ON note_steps(note_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_images_note_id ON note_images(note_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id)")
+
+    # Note Revisions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS note_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            command TEXT DEFAULT '',
+            description TEXT,
+            note_type TEXT DEFAULT 'command',
+            category_id INTEGER,
+            reference_links TEXT DEFAULT '[]',
+            steps TEXT DEFAULT '[]',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (category_id) REFERENCES categories(id),
+            FOREIGN KEY (created_by) REFERENCES users(id)
         )
     ''')
 
@@ -175,6 +254,16 @@ def init_db():
         END;
     ''')
 
+    # Performance optimizing indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_category_id ON notes(category_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_approved_created_at ON notes(approved, created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_steps_note_id ON note_steps(note_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_images_note_id_step_id ON note_images(note_id, step_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_note_id ON audit_logs(note_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC)")
+
     # Ensure default settings exist
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('reverse_proxy_url', '')")
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('autobackup_enabled', '1')")
@@ -194,8 +283,8 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         admin_hash = generate_password_hash("admin")
         cursor.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            ("admin", admin_hash, "admin")
+            "INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
+            ("admin", admin_hash, "admin", "local")
         )
 
     conn.commit()

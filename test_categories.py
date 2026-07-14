@@ -18,7 +18,7 @@ def test_create_category_as_user(user_client):
         'name': 'Hacker Category'
     })
     assert response.status_code == 403
-    assert 'Admin privilege required' in response.get_json()['message']
+    assert 'Admin or Moderator privileges required' in response.get_json()['message']
 
 def test_delete_category_as_admin(admin_client):
     # First create

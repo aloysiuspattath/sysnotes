@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 import secrets
+from functools import wraps
 
 import requests
 import xml.etree.ElementTree as ET
@@ -94,7 +95,7 @@ MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 15
 _login_attempts = {}  # {username: {'count': N, 'locked_until': datetime}}
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -138,6 +139,13 @@ app.wsgi_app = ProxyDispatcherMiddleware(app.wsgi_app)
 def force_https():
     request.environ['wsgi.url_scheme'] = 'https'
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    with open('error_log.txt', 'a') as f:
+        f.write(traceback.format_exc() + '\n')
+    return "Internal Server Error", 500
+
 # Serve Frontend SPA
 @app.route('/')
 def serve_index():
@@ -177,7 +185,7 @@ def get_note_by_id(note_id):
             "SELECT n.id, n.title, n.command, n.description, n.note_type,"
             " n.category_id, c.name as category_name,"
             " n.created_at, n.updated_at, n.created_by,"
-            " u.username as created_by_username, n.approved"
+            " u.username as created_by_username, n.approved, n.reference_links"
             " FROM notes n"
             " LEFT JOIN categories c ON n.category_id = c.id"
             " LEFT JOIN users u ON n.created_by = u.id"
@@ -212,12 +220,21 @@ def get_note_by_id(note_id):
         )
         note["tags"] = [r["name"] for r in cursor.fetchall()]
         cursor.execute(
-            "SELECT id, step_order, title, command, description"
+            "SELECT id, step_order, title, command, description, blocks"
             " FROM note_steps WHERE note_id = ? ORDER BY step_order",
             (note_id,)
         )
         steps = [dict(r) for r in cursor.fetchall()]
+        import json
         for step in steps:
+            if step.get('blocks'):
+                try:
+                    step['blocks'] = json.loads(step['blocks'])
+                except:
+                    step['blocks'] = []
+            else:
+                step['blocks'] = []
+            
             cursor.execute(
                 "SELECT id, filename, original_name FROM note_images"
                 " WHERE note_id = ? AND step_id = ? ORDER BY id",
@@ -256,14 +273,7 @@ def login():
         if not username or not password:
             return jsonify({'message': 'Invalid credentials'}), 401
 
-        # Rate limiting: check if account is locked
-        import datetime as _dt
-        now = _dt.datetime.utcnow()
-        attempt_info = _login_attempts.get(username)
-        if attempt_info and attempt_info.get('locked_until') and now < attempt_info['locked_until']:
-            remaining = int((attempt_info['locked_until'] - now).total_seconds() // 60) + 1
-            return jsonify({'message': f'Account temporarily locked. Try again in {remaining} minute(s)'}), 429
-
+        # Rate limiting: check if account is locked in DB for local users
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         user = cursor.fetchone()
@@ -272,10 +282,23 @@ def login():
             return jsonify({'message': 'Invalid credentials'}), 401
 
         login_type = user['auth_type']
-
+        
         # Enforce that the user selected the correct authentication type
         if requested_login_type and requested_login_type != login_type:
             return jsonify({'message': 'Invalid credentials'}), 401
+
+        if login_type == 'local':
+            import datetime as _dt
+            if user['locked_until']:
+                locked_until = _dt.datetime.strptime(user['locked_until'], '%Y-%m-%d %H:%M:%S')
+                now = _dt.datetime.utcnow()
+                if now < locked_until:
+                    remaining = int((locked_until - now).total_seconds() // 60) + 1
+                    return jsonify({'message': f'Account temporarily locked. Try again in {remaining} minute(s)'}), 429
+                else:
+                    # Lock expired, reset failed attempts
+                    cursor.execute("UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?", (user['id'],))
+                    conn.commit()
 
         auth_success = False
         display_name = None
@@ -290,23 +313,50 @@ def login():
                 auth_success = True
 
         if auth_success:
-            # Clear login attempts on success
-            _login_attempts.pop(username, None)
+            if login_type == 'local':
+                cursor.execute("UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?", (user['id'],))
+                conn.commit()
+            
             token = generate_token(user['id'], user['username'], user['role'])
             resp = {'token': token, 'role': user['role'], 'username': user['username']}
             if display_name:
                 resp['display_name'] = display_name
             return jsonify(resp)
         else:
-            # Track failed attempts
-            if username not in _login_attempts:
-                _login_attempts[username] = {'count': 0, 'locked_until': None}
-            _login_attempts[username]['count'] += 1
-            if _login_attempts[username]['count'] >= MAX_LOGIN_ATTEMPTS:
-                _login_attempts[username]['locked_until'] = now + _dt.timedelta(minutes=LOCKOUT_DURATION_MINUTES)
-                _login_attempts[username]['count'] = 0
-                return jsonify({'message': f'Too many failed attempts. Account locked for {LOCKOUT_DURATION_MINUTES} minutes'}), 429
+            if login_type == 'local':
+                failed_attempts = (user['failed_attempts'] or 0) + 1
+                import datetime as _dt
+                if failed_attempts >= 5:
+                    locked_until = (_dt.datetime.utcnow() + _dt.timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+                    cursor.execute("UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?", (failed_attempts, locked_until, user['id']))
+                    conn.commit()
+                    return jsonify({'message': 'Account temporarily locked due to too many failed attempts. Try again in 15 minutes.'}), 429
+                else:
+                    cursor.execute("UPDATE users SET failed_attempts = ? WHERE id = ?", (failed_attempts, user['id']))
+                    conn.commit()
             return jsonify({'message': 'Invalid credentials'}), 401
+    finally:
+        conn.close()
+
+def admin_or_moderator_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not hasattr(request, 'user') or request.user is None:
+            return jsonify({'message': 'Authentication required'}), 401
+        if request.user.get('role') not in ['admin', 'moderator']:
+            return jsonify({'message': 'Admin or Moderator privileges required'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        return jsonify({'status': 'ok', 'message': 'API and Database are operational'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
     finally:
         conn.close()
 
@@ -373,8 +423,8 @@ def update_user_role(user_id):
 
         data = request.json
         new_role = data.get('role')
-        if new_role not in ['author', 'moderator']:
-            return jsonify({'message': 'Can only change role to author or moderator'}), 400
+        if new_role not in ['author', 'moderator', 'admin']:
+            return jsonify({'message': 'Can only change role to author, moderator, or admin'}), 400
 
         cursor = conn.cursor()
         
@@ -494,7 +544,8 @@ def get_categories():
         conn.close()
 
 @app.route('/api/categories', methods=['POST'])
-@admin_required
+@login_required
+@admin_or_moderator_required
 def create_category():
     conn = get_db()
     try:
@@ -515,7 +566,8 @@ def create_category():
         conn.close()
 
 @app.route('/api/categories/<int:cat_id>', methods=['DELETE'])
-@admin_required
+@login_required
+@admin_or_moderator_required
 def delete_category(cat_id):
     conn = get_db()
     try:
@@ -531,9 +583,10 @@ def delete_category(cat_id):
     finally:
         conn.close()
 
-@app.route('/api/categories/<int:cat_id>/toggle', methods=['PUT'])
-@admin_required
-def toggle_category(cat_id):
+@app.route('/api/categories/<int:cat_id>', methods=['PUT'])
+@login_required
+@admin_or_moderator_required
+def update_category(cat_id):
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -621,12 +674,21 @@ def _link_tags_to_note(cursor, conn, note_id, tags):
 def _get_steps_for_note(cursor, note_id):
     """Fetch all steps for a note, each with their images."""
     cursor.execute("""
-        SELECT id, step_order, title, command, description
+        SELECT id, step_order, title, command, description, blocks
         FROM note_steps WHERE note_id = ?
         ORDER BY step_order
     """, (note_id,))
     steps = [dict(row) for row in cursor.fetchall()]
+    import json
     for step in steps:
+        if step.get('blocks'):
+            try:
+                step['blocks'] = json.loads(step['blocks'])
+            except:
+                step['blocks'] = []
+        else:
+            step['blocks'] = []
+        
         cursor.execute("""
             SELECT id, filename, original_name FROM note_images
             WHERE note_id = ? AND step_id = ?
@@ -651,11 +713,13 @@ def _get_note_images(cursor, note_id):
 
 def _save_steps(cursor, note_id, steps):
     """Delete existing steps and insert new ones."""
+    import json
     cursor.execute("DELETE FROM note_steps WHERE note_id = ?", (note_id,))
     for i, step in enumerate(steps):
+        blocks_json = json.dumps(step.get('blocks', []))
         cursor.execute(
-            "INSERT INTO note_steps (note_id, step_order, title, command, description) VALUES (?,?,?,?,?)",
-            (note_id, i, step.get('title', ''), step.get('command', ''), step.get('description', ''))
+            "INSERT INTO note_steps (note_id, step_order, title, command, description, blocks) VALUES (?,?,?,?,?,?)",
+            (note_id, i, step.get('title', ''), step.get('command', ''), step.get('description', ''), blocks_json)
         )
 
 @app.route('/api/last_updated', methods=['GET'])
@@ -678,51 +742,46 @@ def get_notes():
         tag = request.args.get('tag', '').strip()
         status = request.args.get('status', '').strip()
 
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 50, type=int)
+        offset = (page - 1) * limit
+
         cursor = conn.cursor()
 
         base_select = """
-            SELECT DISTINCT n.id, n.title, n.command, n.description, n.note_type,
+            SELECT n.id, n.title, n.command, n.description, n.note_type,
                    n.category_id, c.name as category_name,
-                   n.created_at, n.updated_at, n.created_by,
-                   u.username as created_by_username, n.approved
+                   n.created_at, n.updated_at, n.created_by, n.reference_links,
+                   u.username as created_by_username, n.approved, n.status,
+                   (SELECT COUNT(*) FROM note_steps WHERE note_id = n.id) as step_count
             FROM notes n
             LEFT JOIN categories c ON n.category_id = c.id
             LEFT JOIN users u ON n.created_by = u.id
-            LEFT JOIN note_tags nt ON nt.note_id = n.id
-            LEFT JOIN tags tg ON tg.id = nt.tag_id
-            LEFT JOIN note_steps ns ON ns.note_id = n.id
         """
-
         conditions = []
         params = []
 
         if query:
-            terms = query.split()
-            for term in terms:
-                term_pattern = f"%{term.lower()}%"
-                conditions.append(
-                    """(
-                        LOWER(n.title) LIKE ? OR 
-                        LOWER(n.description) LIKE ? OR 
-                        LOWER(n.command) LIKE ? OR 
-                        LOWER(c.name) LIKE ? OR 
-                        LOWER(tg.name) LIKE ? OR 
-                        LOWER(ns.title) LIKE ? OR 
-                        LOWER(ns.command) LIKE ? OR 
-                        LOWER(ns.description) LIKE ?
-                    )"""
-                )
-                params.extend([term_pattern] * 8)
+            import re
+            words = [w for w in re.sub(r'[^\w\s]', ' ', query).split() if w]
+            if words:
+                search_conditions = []
+                for word in words:
+                    search_pattern = f"%{word}%"
+                    search_conditions.append("(n.title LIKE ? OR n.command LIKE ? OR n.description LIKE ?)")
+                    params.extend([search_pattern, search_pattern, search_pattern])
+                conditions.append("(" + " AND ".join(search_conditions) + ")")
 
         if category:
             conditions.append("c.id = ?")
             params.append(category)
 
         if tag:
+            base_select += " LEFT JOIN note_tags nt ON nt.note_id = n.id LEFT JOIN tags tg ON tg.id = nt.tag_id"
             conditions.append("tg.name = ?")
             params.append(tag)
 
-        # Separate approved from pending notes
+        # Separate approved from pending and draft notes
         if status == 'pending':
             token = request.headers.get('Authorization')
             if not token:
@@ -737,33 +796,60 @@ def get_notes():
             user_role = payload.get('role', 'author')
             
             if user_role in ['admin', 'moderator']:
-                conditions.append("n.approved = 0")
+                conditions.append("n.approved = 0 AND n.status = 'published'")
             else:
-                conditions.append("n.approved = 0 AND n.created_by = ?")
+                conditions.append("n.approved = 0 AND n.status = 'published' AND n.created_by = ?")
                 params.append(user_id)
+        elif status == 'draft':
+            token = request.headers.get('Authorization')
+            if not token:
+                return jsonify({'message': 'Token is missing!'}), 401
+            if token.startswith('Bearer '):
+                token = token[7:]
+            payload = decode_token(token)
+            if isinstance(payload, str):
+                return jsonify({'message': 'Invalid token!'}), 401
+            
+            user_id = payload.get('sub')
+            conditions.append("n.status = 'draft' AND n.created_by = ?")
+            params.append(user_id)
         else:
-            conditions.append("n.approved = 1")
+            conditions.append("n.approved = 1 AND n.status = 'published'")
 
         sql = base_select
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
 
-        sql += " ORDER BY n.created_at DESC"
+        sql += " ORDER BY n.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
 
+        # Batch fetch tags to avoid N+1
+        note_ids = [str(r['id']) for r in rows]
+        tags_map = {}
+        if note_ids:
+            placeholders = ','.join('?' * len(note_ids))
+            cursor.execute(f"""
+                SELECT nt.note_id, t.name 
+                FROM note_tags nt 
+                JOIN tags t ON nt.tag_id = t.id 
+                WHERE nt.note_id IN ({placeholders})
+            """, note_ids)
+            for nt in cursor.fetchall():
+                nid = nt['note_id']
+                if nid not in tags_map:
+                    tags_map[nid] = []
+                tags_map[nid].append(nt['name'])
+
+        # Build response
         notes = []
         for row in rows:
             note = dict(row)
-            note['tags'] = _get_tags_for_note(cursor, note['id'])
-            note_type = note.get('note_type', 'command')
-            if note_type == 'procedure':
-                note['steps'] = _get_steps_for_note(cursor, note['id'])
-                note['images'] = _get_note_images(cursor, note['id'])
-            else:
-                note['steps'] = []
-                note['images'] = _get_note_images(cursor, note['id'])
+            note['tags'] = tags_map.get(note['id'], [])
+            note['steps'] = []  # Trimmed for performance, load on detail view
+            note['images'] = [] # Trimmed for performance, load on detail view
             notes.append(note)
 
         return jsonify(notes)
@@ -784,22 +870,37 @@ def create_note():
         tags = data.get('tags', [])
         steps = data.get('steps', [])
 
-        if not title:
-            return jsonify({'message': 'Title is required'}), 400
-        if note_type == 'command' and not command:
-            return jsonify({'message': 'Command is required for command notes'}), 400
-        if note_type == 'procedure' and not steps:
-            return jsonify({'message': 'At least one step is required for procedures'}), 400
-        if note_type == 'plain' and not description:
-            return jsonify({'message': 'Content is required for plain notes'}), 400
+        status = data.get('status', 'published').strip()
+        if status not in ['published', 'draft']:
+            status = 'published'
+
+        if status == 'published':
+            if not title:
+                return jsonify({'message': 'Title is required'}), 400
+            if note_type == 'command' and not command:
+                return jsonify({'message': 'Command is required for command notes'}), 400
+            if note_type == 'procedure' and not steps:
+                return jsonify({'message': 'At least one step is required for procedures'}), 400
+            if note_type == 'plain' and not description:
+                return jsonify({'message': 'Content is required for plain notes'}), 400
+        else:
+            if not title:
+                title = "Untitled Note"
+
+        reference_links = data.get('reference_links', [])
+        import json
+        ref_links_json = json.dumps(reference_links)
 
         user_role = request.user.get('role', 'author')
+        # Drafts don't need approval, they are invisible anyway
         approved = 1 if user_role in ['admin', 'moderator'] else 0
+        if status == 'draft':
+            approved = 0
 
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO notes (title, command, description, note_type, category_id, created_by, approved) VALUES (?,?,?,?,?,?,?)",
-            (title, command, description, note_type, category_id, request.user['sub'], approved)
+            "INSERT INTO notes (title, command, description, note_type, category_id, created_by, approved, reference_links, status) VALUES (?,?,?,?,?,?,?,?,?)",
+            (title, command, description, note_type, category_id, request.user['sub'], approved, ref_links_json, status)
         )
         note_id = cursor.lastrowid
 
@@ -816,6 +917,40 @@ def create_note():
     finally:
         conn.close()
 
+def _create_revision(cursor, note_id, note):
+    # Fetch steps with blocks
+    cursor.execute("SELECT id, step_order, title, command, description, blocks FROM note_steps WHERE note_id = ? ORDER BY step_order", (note_id,))
+    steps = []
+    import json
+    for r in cursor.fetchall():
+        step = dict(r)
+        if step.get('blocks'):
+            try:
+                step['blocks'] = json.loads(step['blocks'])
+            except:
+                step['blocks'] = []
+        else:
+            step['blocks'] = []
+        steps.append(step)
+    
+    steps_json = json.dumps(steps)
+    note_dict = dict(note)
+    
+    cursor.execute("""
+        INSERT INTO note_revisions (note_id, title, command, description, note_type, category_id, reference_links, steps, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        note_id,
+        note_dict.get('title', ''),
+        note_dict.get('command', ''),
+        note_dict.get('description', ''),
+        note_dict.get('note_type', 'command'),
+        note_dict.get('category_id'),
+        note_dict.get('reference_links', '[]'),
+        steps_json,
+        note_dict.get('created_by')
+    ))
+
 @app.route('/api/notes/<int:note_id>', methods=['PUT'])
 @login_required
 def update_note(note_id):
@@ -829,9 +964,11 @@ def update_note(note_id):
         category_id = data.get('category_id')
         tags = data.get('tags', [])
         steps = data.get('steps', [])
+        status = data.get('status', 'published').strip()
+        is_autosave = data.get('is_autosave', False)
 
-        if not title:
-            return jsonify({'message': 'Title is required'}), 400
+        if status not in ['published', 'draft']:
+            status = 'published'
 
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
@@ -839,21 +976,46 @@ def update_note(note_id):
         if not note:
             return jsonify({'message': 'Note not found'}), 404
 
+        if status == 'published':
+            if not title:
+                return jsonify({'message': 'Title is required'}), 400
+            if note_type == 'command' and not command:
+                return jsonify({'message': 'Command is required for command notes'}), 400
+            if note_type == 'procedure' and not steps:
+                return jsonify({'message': 'At least one step is required for procedures'}), 400
+            if note_type == 'plain' and not description:
+                return jsonify({'message': 'Content is required for plain notes'}), 400
+        else:
+            if not title:
+                title = "Untitled Note"
+
         user_role = request.user.get('role', 'author')
         is_creator = (note['created_by'] == request.user['sub'])
         
         if user_role not in ['admin', 'moderator'] and not is_creator:
             return jsonify({'message': 'Access denied'}), 403
 
-        # Force re-approval if an author edits their note
-        approved = note['approved']
-        if user_role not in ['admin', 'moderator']:
+        # Determine approval status on update
+        if status == 'draft':
             approved = 0
+        else:  # status == 'published'
+            if user_role in ['admin', 'moderator']:
+                approved = 1
+            else:
+                approved = 0
+
+        reference_links = data.get('reference_links', [])
+        import json
+        ref_links_json = json.dumps(reference_links)
+
+        # Log revision before editing if this is an explicit update (not autosave)
+        if not is_autosave:
+            _create_revision(cursor, note_id, note)
 
         cursor.execute("""
             UPDATE notes SET title=?, command=?, description=?, note_type=?,
-            category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
-        """, (title, command, description, note_type, category_id, approved, note_id))
+            category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP, reference_links=?, status=? WHERE id=?
+        """, (title, command, description, note_type, category_id, approved, ref_links_json, status, note_id))
 
         if steps is not None:
             _save_steps(cursor, note_id, steps)
@@ -900,6 +1062,96 @@ def delete_note(note_id):
                 os.remove(fpath)
 
         return jsonify({'message': 'Note deleted successfully'})
+    finally:
+        conn.close()
+
+@app.route('/api/notes/<int:note_id>/revisions', methods=['GET'])
+@login_required
+def get_note_revisions(note_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM notes WHERE id = ?", (note_id,))
+        if not cursor.fetchone():
+            return jsonify({'message': 'Note not found'}), 404
+        
+        cursor.execute("""
+            SELECT r.id, r.note_id, r.title, r.command, r.description, r.note_type, r.category_id, r.reference_links, r.steps, r.created_at, r.created_by, u.username as created_by_username
+            FROM note_revisions r
+            LEFT JOIN users u ON r.created_by = u.id
+            WHERE r.note_id = ?
+            ORDER BY r.created_at DESC
+        """, (note_id,))
+        revisions = [dict(row) for row in cursor.fetchall()]
+        import json
+        for r in revisions:
+            try:
+                r['steps'] = json.loads(r['steps'])
+            except:
+                r['steps'] = []
+        return jsonify(revisions)
+    finally:
+        conn.close()
+
+@app.route('/api/notes/<int:note_id>/revisions/<int:rev_id>/restore', methods=['POST'])
+@login_required
+def restore_note_revision(note_id, rev_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        # Verify note and revision
+        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        if not note:
+            return jsonify({'message': 'Note not found'}), 404
+        
+        cursor.execute("SELECT * FROM note_revisions WHERE id = ? AND note_id = ?", (rev_id, note_id))
+        revision = cursor.fetchone()
+        if not revision:
+            return jsonify({'message': 'Revision not found'}), 404
+
+        user_role = request.user.get('role', 'author')
+        is_creator = (note['created_by'] == request.user['sub'])
+        if user_role not in ['admin', 'moderator'] and not is_creator:
+            return jsonify({'message': 'Permission denied'}), 403
+
+        # Force re-approval if an author restores a note
+        approved = note['approved']
+        if user_role not in ['admin', 'moderator']:
+            approved = 0
+
+        # Before restoring, save the current state as a revision
+        _create_revision(cursor, note_id, note)
+
+        # Restore from revision
+        import json
+        cursor.execute("""
+            UPDATE notes SET title=?, command=?, description=?, note_type=?, category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP, reference_links=?
+            WHERE id=?
+        """, (
+            revision['title'],
+            revision['command'],
+            revision['description'],
+            revision['note_type'],
+            revision['category_id'],
+            approved,
+            revision['reference_links'],
+            note_id
+        ))
+
+        # Restore steps
+        cursor.execute("DELETE FROM note_steps WHERE note_id = ?", (note_id,))
+        steps = json.loads(revision['steps'])
+        for i, step in enumerate(steps):
+            blocks_json = json.dumps(step.get('blocks', []))
+            cursor.execute("""
+                INSERT INTO note_steps (note_id, step_order, title, command, description, blocks)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (note_id, i, step.get('title', ''), step.get('command', ''), step.get('description', ''), blocks_json))
+
+        log_audit(conn, note_id, 'RESTORED', request.user['username'], f"Restored note to revision {rev_id}")
+        conn.commit()
+        return jsonify({'message': 'Revision restored successfully'})
     finally:
         conn.close()
 
@@ -1103,8 +1355,6 @@ def add_security_headers(response):
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5005, debug=False)
 
 # ================= AUDIT LOGS ================= #
 
@@ -1139,3 +1389,6 @@ def get_note_audit(note_id):
     finally:
         conn.close()
 
+if __name__ == '__main__':
+    ssl_context = ('cert.pem', 'key.pem') if os.path.exists('cert.pem') and os.path.exists('key.pem') else None
+    app.run(host='0.0.0.0', port=5005, debug=False, ssl_context=ssl_context)

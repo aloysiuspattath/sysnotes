@@ -44,8 +44,8 @@ def admin_token():
     admin = cursor.fetchone()
     if not admin:
         from werkzeug.security import generate_password_hash
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                       ('testadmin', generate_password_hash('testpass'), 'admin'))
+        cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
+                       ('testadmin', generate_password_hash('testpass'), 'admin', 'local'))
         conn.commit()
         admin_id = cursor.lastrowid
     else:
@@ -64,8 +64,8 @@ def user_token():
     user = cursor.fetchone()
     if not user:
         from werkzeug.security import generate_password_hash
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                       ('testuser', generate_password_hash('testpass'), 'author'))
+        cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
+                       ('testuser', generate_password_hash('testpass'), 'author', 'local'))
         conn.commit()
         user_id = cursor.lastrowid
     else:
@@ -84,8 +84,8 @@ def moderator_token():
     user = cursor.fetchone()
     if not user:
         from werkzeug.security import generate_password_hash
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                       ('testmod', generate_password_hash('testpass'), 'moderator'))
+        cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
+                       ('testmod', generate_password_hash('testpass'), 'moderator', 'local'))
         conn.commit()
         user_id = cursor.lastrowid
     else:
