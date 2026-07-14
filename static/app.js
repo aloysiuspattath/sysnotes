@@ -254,7 +254,15 @@
 
     // ─── MODALS ──────────────────────────────────────────
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function closeModal(id) { 
+        document.getElementById(id).style.display = 'none'; 
+        if (id === 'login-modal') {
+            const step1 = document.getElementById('login-step-1');
+            const step2 = document.getElementById('login-step-2');
+            if (step1) step1.style.display = 'block';
+            if (step2) step2.style.display = 'none';
+        }
+    }
     function closeAllModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); }
     window.openModal = openModal;
     window.closeModal = closeModal;
@@ -1125,7 +1133,13 @@
         const tagsHtml = (note.tags || []).map(t => `<span class="note-tag-pill">${escapeHTML(t)}</span>`).join('');
         const categoryBadge = note.category_name
             ? `<span class="note-category-badge">${ICONS.folder} ${escapeHTML(note.category_name)}</span>` : '';
-        const metaHtml = `<span class="note-meta-user">${ICONS.user} ${escapeHTML(note.created_by_username || 'Unknown')}</span>`;
+        const teamBadge = note.team_name 
+            ? `<a href="/${escapeHTML(note.team_name)}" class="note-team-badge" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; background:rgba(var(--accent-rgb, 99, 102, 241), 0.12); color:var(--accent); border:1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.25); border-radius:4px; padding:2px 6px; font-weight:600; cursor:pointer; margin-right:8px;">👥 ${escapeHTML(note.team_name)}</a>`
+            : '';
+        const metaHtml = `
+            ${teamBadge}
+            <span class="note-meta-user">${ICONS.user} ${escapeHTML(note.created_by_username || 'Unknown')}</span>
+        `;
         const isCreator = (currentToken && note.created_by_username === currentUsername);
         const canModify = currentToken && (currentRole === 'admin' || currentRole === 'moderator' || isCreator);
         
@@ -1400,6 +1414,21 @@
         }
     }
 
+    function finalizeLogin(data) {
+        currentToken = data.token;
+        currentRole = data.role;
+        currentUsername = data.username;
+        currentUserTeams = data.teams || [];
+        localStorage.setItem('sn_token', currentToken);
+        localStorage.setItem('sn_role', currentRole);
+        localStorage.setItem('sn_username', currentUsername);
+        localStorage.setItem('sn_teams', JSON.stringify(currentUserTeams));
+        closeModal('login-modal');
+        updateAuthUI();
+        refreshAll();
+        showToast('Logged in successfully');
+    }
+
     async function handleLogin(e) {
         e.preventDefault();
         const username = document.getElementById('login-username').value.trim();
@@ -1420,16 +1449,21 @@
             currentRole = data.role;
             currentUsername = data.username;
             currentUserTeams = data.teams || [];
-            localStorage.setItem('sn_token', currentToken);
-            localStorage.setItem('sn_role', currentRole);
-            localStorage.setItem('sn_username', currentUsername);
-            localStorage.setItem('sn_teams', JSON.stringify(currentUserTeams));
-            closeModal('login-modal');
-            updateAuthUI();
-            renderNotes(allNotes);
-            showToast('Logged in successfully');
+            
+            // If user belongs to multiple teams, prompt selection
+            if (currentUserTeams.length > 1) {
+                const teamSelect = document.getElementById('login-active-team');
+                teamSelect.innerHTML = `<option value="all" selected>All My Teams</option>` +
+                    currentUserTeams.map(t => `<option value="${escapeHTML(t.name)}">${escapeHTML(t.name)}</option>`).join('');
+                
+                document.getElementById('login-step-1').style.display = 'none';
+                document.getElementById('login-step-2').style.display = 'block';
+                return;
+            }
+            
+            finalizeLogin(data);
         } else {
-            errorEl.textContent = data.error || 'Login failed';
+            errorEl.textContent = data.message || 'Login failed';
             errorEl.style.display = 'block';
         }
     }
@@ -2785,9 +2819,17 @@
         let html = '';
         teams.forEach(t => {
             const dateStr = t.created_at ? new Date(t.created_at + 'Z').toLocaleString() : '-';
+            const relativeLink = `/${t.name.toLowerCase()}`;
+            const absoluteLink = `${window.location.origin}${relativeLink}`;
             html += `<tr>
                 <td style="font-weight:600;">${escapeHTML(t.name)}</td>
                 <td>${escapeHTML(t.description || '-')}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <a href="${relativeLink}" target="_blank" style="color:var(--accent); text-decoration:none; font-size:0.85rem; font-weight:600; display:inline-flex; align-items:center; gap:4px;">${ICONS.folder} Open</a>
+                        <button class="btn btn-ghost copy-team-link-btn" data-link="${escapeHTML(absoluteLink)}" style="padding:2px 6px; font-size:0.75rem; min-height:0; height:auto; line-height:1; display:inline-flex; align-items:center; gap:4px;">${ICONS.copy} Copy</button>
+                    </div>
+                </td>
                 <td style="font-size:0.85rem; color:var(--text-secondary);">${dateStr}</td>
                 <td>
                     <button class="btn-icon btn-icon-danger delete-team-btn" data-team-id="${t.id}">${ICONS.trash}</button>
@@ -2795,6 +2837,13 @@
             </tr>`;
         });
         tbody.innerHTML = html;
+
+        tbody.querySelectorAll('.copy-team-link-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                copyTextToClipboard(btn.dataset.link);
+                showToast('Team home page URL copied!');
+            });
+        });
 
         tbody.querySelectorAll('.delete-team-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -2863,6 +2912,26 @@
         const userTeamsForm = document.getElementById('user-teams-form');
         if (userTeamsForm) {
             userTeamsForm.addEventListener('submit', handleUserTeamsSubmit);
+        }
+
+        const confirmTeamBtn = document.getElementById('login-confirm-team-btn');
+        if (confirmTeamBtn) {
+            confirmTeamBtn.addEventListener('click', () => {
+                const selectedTeam = document.getElementById('login-active-team').value;
+                if (selectedTeam === 'all') {
+                    activeTeamFilter = null;
+                } else {
+                    activeTeamFilter = selectedTeam;
+                }
+                updateFilterIndicator();
+                
+                finalizeLogin({
+                    token: currentToken,
+                    role: currentRole,
+                    username: currentUsername,
+                    teams: currentUserTeams
+                });
+            });
         }
     }
 

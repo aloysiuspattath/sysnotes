@@ -151,13 +151,17 @@ def handle_exception(e):
 def serve_index():
     return render_template('index.html', base_url=get_base_url())
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route('/t/<team_name>')
 @app.route('/<team_name>')
 def serve_team_index(team_name):
     # Exclude system folders, favicon and static assets
-    if team_name in ['static', 'uploads', 'api', 'note', 'favicon.ico'] or '.' in team_name:
-        # Let Flask fall back to static/default routing
-        return None
+    if team_name in ['static', 'uploads', 'api', 'note', 'favicon.ico', 'robots.txt'] or '.' in team_name:
+        from flask import abort
+        abort(404)
         
     conn = get_db()
     try:
@@ -171,8 +175,8 @@ def serve_team_index(team_name):
     finally:
         conn.close()
         
-    # If team does not exist, redirect to home page
-    return redirect('/')
+    from flask import abort
+    abort(404)
 
 # Serve uploaded images
 @app.route('/uploads/<path:filename>')
@@ -359,8 +363,12 @@ def login():
             token = generate_token(user['id'], user['username'], user['role'])
             from database import get_user_teams
             teams = get_user_teams(user['id'])
-            team_ids = [t['id'] for t in teams]
-            resp = {'token': token, 'role': user['role'], 'username': user['username'], 'teams': team_ids}
+            resp = {
+                'token': token, 
+                'role': user['role'], 
+                'username': user['username'], 
+                'teams': [{'id': t['id'], 'name': t['name']} for t in teams]
+            }
             if display_name:
                 resp['display_name'] = display_name
             return jsonify(resp)
@@ -881,10 +889,12 @@ def get_notes():
                    n.category_id, c.name as category_name,
                    n.created_at, n.updated_at, n.created_by, n.reference_links,
                    u.username as created_by_username, n.approved, n.status,
+                   n.team_id, n.visibility, tm.name as team_name,
                    (SELECT COUNT(*) FROM note_steps WHERE note_id = n.id) as step_count
             FROM notes n
             LEFT JOIN categories c ON n.category_id = c.id
             LEFT JOIN users u ON n.created_by = u.id
+            LEFT JOIN teams tm ON n.team_id = tm.id
         """
         conditions = []
         params = []

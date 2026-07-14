@@ -512,6 +512,7 @@
                                         <tr>
                                             <th>Team Name</th>
                                             <th>Description</th>
+                                            <th>Home Page</th>
                                             <th>Created At</th>
                                             <th>Actions</th>
                                         </tr>
@@ -913,23 +914,35 @@
                 </button>
             </div>
             <form id="login-form" class="modal-body">
-                <div class="form-group">
-                    <label for="login-username" class="form-label">Username</label>
-                    <input type="text" id="login-username" class="form-input" placeholder="Enter username" required autocomplete="username">
+                <div id="login-step-1">
+                    <div class="form-group">
+                        <label for="login-username" class="form-label">Username</label>
+                        <input type="text" id="login-username" class="form-input" placeholder="Enter username" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password" class="form-label">Password</label>
+                        <input type="password" id="login-password" class="form-input" placeholder="Enter password" required autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-type" class="form-label">Authentication Type</label>
+                        <select id="login-type" class="form-input form-select">
+                            <option value="ad" selected>Active Directory (AD)</option>
+                            <option value="local">Local Database</option>
+                        </select>
+                    </div>
+                    <div id="login-error" class="form-error" style="display:none;"></div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
                 </div>
-                <div class="form-group">
-                    <label for="login-password" class="form-label">Password</label>
-                    <input type="password" id="login-password" class="form-input" placeholder="Enter password" required autocomplete="current-password">
+                <div id="login-step-2" style="display:none;">
+                    <div class="form-group">
+                        <label for="login-active-team" class="form-label">Select Active Team</label>
+                        <select id="login-active-team" class="form-input form-select"></select>
+                    </div>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:15px; line-height:1.4;">
+                        Please choose the active team session to filter your dashboard. You can clear or change this filter anytime from the top bar.
+                    </p>
+                    <button type="button" id="login-confirm-team-btn" class="btn btn-primary btn-full">Continue to Dashboard</button>
                 </div>
-                <div class="form-group">
-                    <label for="login-type" class="form-label">Authentication Type</label>
-                    <select id="login-type" class="form-input form-select">
-                        <option value="ad" selected>Active Directory (AD)</option>
-                        <option value="local">Local Database</option>
-                    </select>
-                </div>
-                <div id="login-error" class="form-error" style="display:none;"></div>
-                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
             </form>
         </div>
     </div>
