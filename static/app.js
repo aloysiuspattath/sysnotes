@@ -2840,7 +2840,7 @@
 
         tbody.querySelectorAll('.copy-team-link-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                copyTextToClipboard(btn.dataset.link);
+                copyToClipboard(btn.dataset.link, btn);
                 showToast('Team home page URL copied!');
             });
         });
