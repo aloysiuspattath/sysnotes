@@ -8,13 +8,17 @@ from database import get_db
 _UTC = datetime.timezone.utc
 
 def generate_token(user_id, username, role):
+    from database import get_user_teams
     now = datetime.datetime.now(_UTC)
+    teams = get_user_teams(user_id)
+    team_ids = [t['id'] for t in teams]
     payload = {
         'exp': now + datetime.timedelta(days=7),
         'iat': now,
         'sub': str(user_id),
         'username': username,
-        'role': role
+        'role': role,
+        'teams': team_ids
     }
     return jwt.encode(payload, current_app.config.get('SECRET_KEY'), algorithm='HS256')
 

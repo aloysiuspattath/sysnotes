@@ -185,10 +185,12 @@ def get_note_by_id(note_id):
             "SELECT n.id, n.title, n.command, n.description, n.note_type,"
             " n.category_id, c.name as category_name,"
             " n.created_at, n.updated_at, n.created_by,"
-            " u.username as created_by_username, n.approved, n.reference_links"
+            " u.username as created_by_username, n.approved, n.reference_links,"
+            " n.status, n.team_id, n.visibility, tm.name as team_name"
             " FROM notes n"
             " LEFT JOIN categories c ON n.category_id = c.id"
             " LEFT JOIN users u ON n.created_by = u.id"
+            " LEFT JOIN teams tm ON n.team_id = tm.id"
             " WHERE n.id = ?"
         )
         cursor.execute(sql, (note_id,))
@@ -197,21 +199,35 @@ def get_note_by_id(note_id):
             return jsonify({"message": "Note not found"}), 404
         note = dict(row)
 
-        # Check authorization if note is not approved
-        if not note.get('approved'):
-            current_user_id = None
-            current_role = None
-            token = request.headers.get('Authorization')
-            if token:
-                if token.startswith('Bearer '):
-                    token = token[7:]
-                payload = decode_token(token)
-                if not isinstance(payload, str):
-                    current_user_id = payload.get('sub')
-                    current_role = payload.get('role')
+        # Check authorization
+        current_user_id = None
+        current_role = None
+        user_team_ids = []
+        token = request.headers.get('Authorization')
+        if token:
+            if token.startswith('Bearer '):
+                token = token[7:]
+            payload = decode_token(token)
+            if not isinstance(payload, str):
+                current_user_id = payload.get('sub')
+                current_role = payload.get('role')
+                user_team_ids = payload.get('teams', [])
+
+        if current_role != 'admin':
+            is_creator = (current_user_id == note['created_by'])
+            is_moderator = (current_role == 'moderator')
             
-            if current_role not in ['admin', 'moderator'] and current_user_id != note['created_by']:
+            if note.get('status') == 'draft' and not is_creator:
                 return jsonify({"message": "Access denied"}), 403
+                
+            if not note.get('approved') and not is_creator and not is_moderator:
+                return jsonify({"message": "Access denied"}), 403
+                
+            is_global = (note.get('visibility') == 'global')
+            has_team_access = (note.get('team_id') in user_team_ids)
+            
+            if not is_global and not has_team_access:
+                return jsonify({"message": "Access denied (Team Restricted)"}), 403
         cursor.execute(
             "SELECT t.name FROM tags t"
             " JOIN note_tags nt ON nt.tag_id = t.id"
@@ -318,7 +334,10 @@ def login():
                 conn.commit()
             
             token = generate_token(user['id'], user['username'], user['role'])
-            resp = {'token': token, 'role': user['role'], 'username': user['username']}
+            from database import get_user_teams
+            teams = get_user_teams(user['id'])
+            team_ids = [t['id'] for t in teams]
+            resp = {'token': token, 'role': user['role'], 'username': user['username'], 'teams': team_ids}
             if display_name:
                 resp['display_name'] = display_name
             return jsonify(resp)
@@ -365,11 +384,14 @@ def health_check():
 @app.route('/api/users', methods=['GET'])
 @admin_required
 def get_users():
+    from database import get_user_teams
     conn = get_db()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT id, username, role, auth_type FROM users")
         users = [dict(row) for row in cursor.fetchall()]
+        for u in users:
+            u['teams'] = get_user_teams(u['id'])
         return jsonify(users)
     finally:
         conn.close()
@@ -384,6 +406,7 @@ def create_user():
         password = data.get('password')
         role = data.get('role', 'author')
         auth_type = data.get('auth_type', 'ad')
+        team_ids = data.get('team_ids', [])
 
         if role not in ['admin', 'moderator', 'author']:
             return jsonify({'message': 'Invalid role. Must be admin, moderator, or author'}), 400
@@ -406,10 +429,49 @@ def create_user():
         try:
             cursor.execute("INSERT INTO users (username, password_hash, role, auth_type) VALUES (?, ?, ?, ?)",
                            (username, pwd_hash, role, auth_type))
+            uid = cursor.lastrowid
+            
+            # Save team links
+            cursor.execute("DELETE FROM user_teams WHERE user_id = ?", (uid,))
+            for tid in team_ids:
+                cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (uid, tid))
+            
             conn.commit()
-            return jsonify({'message': 'User created successfully', 'id': cursor.lastrowid}), 201
+            return jsonify({'message': 'User created successfully', 'id': uid}), 201
         except sqlite3.IntegrityError:
             return jsonify({'message': 'Username already exists'}), 400
+    finally:
+        conn.close()
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    conn = get_db()
+    try:
+        data = request.json
+        role = data.get('role')
+        team_ids = data.get('team_ids')
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'message': 'User not found'}), 404
+
+        if role:
+            if role not in ['admin', 'moderator', 'author']:
+                return jsonify({'message': 'Invalid role'}), 400
+            if request.user['sub'] == user_id and role != 'admin':
+                return jsonify({'message': 'Cannot downgrade your own role'}), 400
+            cursor.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+
+        if team_ids is not None:
+            cursor.execute("DELETE FROM user_teams WHERE user_id = ?", (user_id,))
+            for tid in team_ids:
+                cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (user_id, tid))
+
+        conn.commit()
+        return jsonify({'message': 'User updated successfully'})
     finally:
         conn.close()
 
@@ -461,6 +523,48 @@ def delete_user(user_id):
         return jsonify({'message': 'User deleted successfully'})
     finally:
         conn.close()
+
+# ================= TEAMS (ADMIN ONLY) ================= #
+
+@app.route('/api/admin/teams', methods=['GET'])
+@login_required
+def get_teams_list():
+    from database import get_all_teams
+    try:
+        teams = get_all_teams()
+        return jsonify(teams)
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@app.route('/api/admin/teams', methods=['POST'])
+@admin_required
+def create_new_team():
+    import sqlite3
+    from database import create_team
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        if not name:
+            return jsonify({'message': 'Team name is required'}), 400
+        tid = create_team(name, description)
+        return jsonify({'message': 'Team created successfully', 'id': tid}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'message': 'Team name already exists'}), 400
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@app.route('/api/admin/teams/<int:team_id>', methods=['DELETE'])
+@admin_required
+def remove_team(team_id):
+    from database import delete_team
+    try:
+        delete_team(team_id)
+        return jsonify({'message': 'Team deleted successfully'})
+    except ValueError as ve:
+        return jsonify({'message': str(ve)}), 400
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
 
 # ================= CHANGE PASSWORD ================= #
 
@@ -781,40 +885,45 @@ def get_notes():
             conditions.append("tg.name = ?")
             params.append(tag)
 
-        # Separate approved from pending and draft notes
-        if status == 'pending':
-            token = request.headers.get('Authorization')
-            if not token:
-                return jsonify({'message': 'Token is missing!'}), 401
+        # Determine user auth details
+        token = request.headers.get('Authorization')
+        user_team_ids = []
+        user_role = None
+        user_id = None
+        if token:
             if token.startswith('Bearer '):
                 token = token[7:]
             payload = decode_token(token)
-            if isinstance(payload, str):
-                return jsonify({'message': 'Invalid token!'}), 401
-            
-            user_id = payload.get('sub')
-            user_role = payload.get('role', 'author')
-            
+            if not isinstance(payload, str):
+                user_id = payload.get('sub')
+                user_role = payload.get('role')
+                user_team_ids = payload.get('teams', [])
+
+        # Separate approved from pending and draft notes
+        if status == 'pending':
+            if not user_id:
+                return jsonify({'message': 'Authentication required!'}), 401
             if user_role in ['admin', 'moderator']:
                 conditions.append("n.approved = 0 AND n.status = 'published'")
             else:
                 conditions.append("n.approved = 0 AND n.status = 'published' AND n.created_by = ?")
                 params.append(user_id)
         elif status == 'draft':
-            token = request.headers.get('Authorization')
-            if not token:
-                return jsonify({'message': 'Token is missing!'}), 401
-            if token.startswith('Bearer '):
-                token = token[7:]
-            payload = decode_token(token)
-            if isinstance(payload, str):
-                return jsonify({'message': 'Invalid token!'}), 401
-            
-            user_id = payload.get('sub')
+            if not user_id:
+                return jsonify({'message': 'Authentication required!'}), 401
             conditions.append("n.status = 'draft' AND n.created_by = ?")
             params.append(user_id)
         else:
             conditions.append("n.approved = 1 AND n.status = 'published'")
+
+        # Enforce team isolation for non-drafts
+        if status != 'draft' and user_role != 'admin':
+            if user_team_ids:
+                placeholders = ','.join('?' for _ in user_team_ids)
+                conditions.append(f"(n.visibility = 'global' OR n.team_id IN ({placeholders}))")
+                params.extend(user_team_ids)
+            else:
+                conditions.append("n.visibility = 'global'")
 
         sql = base_select
         if conditions:
@@ -891,7 +1000,23 @@ def create_note():
         import json
         ref_links_json = json.dumps(reference_links)
 
+        team_id = data.get('team_id')
+        visibility = data.get('visibility', 'global').strip()
+        if visibility not in ['team', 'global']:
+            visibility = 'global'
+
         user_role = request.user.get('role', 'author')
+
+        # Validate team assignment
+        if visibility == 'team':
+            if not team_id:
+                return jsonify({'message': 'Team assignment is required for team-only notes'}), 400
+            if user_role != 'admin' and int(team_id) not in request.user.get('teams', []):
+                return jsonify({'message': 'Access denied: You are not a member of the selected team'}), 403
+        else:
+            # If global, team_id is optional (can be null)
+            pass
+
         # Drafts don't need approval, they are invisible anyway
         approved = 1 if user_role in ['admin', 'moderator'] else 0
         if status == 'draft':
@@ -899,8 +1024,8 @@ def create_note():
 
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO notes (title, command, description, note_type, category_id, created_by, approved, reference_links, status) VALUES (?,?,?,?,?,?,?,?,?)",
-            (title, command, description, note_type, category_id, request.user['sub'], approved, ref_links_json, status)
+            "INSERT INTO notes (title, command, description, note_type, category_id, created_by, approved, reference_links, status, team_id, visibility) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (title, command, description, note_type, category_id, request.user['sub'], approved, ref_links_json, status, team_id, visibility)
         )
         note_id = cursor.lastrowid
 
@@ -937,8 +1062,8 @@ def _create_revision(cursor, note_id, note):
     note_dict = dict(note)
     
     cursor.execute("""
-        INSERT INTO note_revisions (note_id, title, command, description, note_type, category_id, reference_links, steps, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO note_revisions (note_id, title, command, description, note_type, category_id, reference_links, steps, created_by, team_id, visibility)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         note_id,
         note_dict.get('title', ''),
@@ -948,7 +1073,9 @@ def _create_revision(cursor, note_id, note):
         note_dict.get('category_id'),
         note_dict.get('reference_links', '[]'),
         steps_json,
-        note_dict.get('created_by')
+        note_dict.get('created_by'),
+        note_dict.get('team_id'),
+        note_dict.get('visibility', 'global')
     ))
 
 @app.route('/api/notes/<int:note_id>', methods=['PUT'])
@@ -995,6 +1122,26 @@ def update_note(note_id):
         if user_role not in ['admin', 'moderator'] and not is_creator:
             return jsonify({'message': 'Access denied'}), 403
 
+        # Verify team edit permission (non-admins must belong to note's team)
+        if user_role != 'admin' and note['team_id'] and int(note['team_id']) not in request.user.get('teams', []):
+            return jsonify({'message': 'Access denied: Note belongs to another team'}), 403
+
+        # Parse new team and visibility settings
+        team_id = data.get('team_id')
+        visibility = data.get('visibility', 'global').strip()
+        if visibility not in ['team', 'global']:
+            visibility = 'global'
+
+        # Validate new team assignment
+        if visibility == 'team':
+            if not team_id:
+                return jsonify({'message': 'Team assignment is required for team-only notes'}), 400
+            if user_role != 'admin' and int(team_id) not in request.user.get('teams', []):
+                return jsonify({'message': 'Access denied: You are not a member of the selected team'}), 403
+        else:
+            # If global, team_id is optional
+            pass
+
         # Determine approval status on update
         if status == 'draft':
             approved = 0
@@ -1014,8 +1161,8 @@ def update_note(note_id):
 
         cursor.execute("""
             UPDATE notes SET title=?, command=?, description=?, note_type=?,
-            category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP, reference_links=?, status=? WHERE id=?
-        """, (title, command, description, note_type, category_id, approved, ref_links_json, status, note_id))
+            category_id=?, approved=?, updated_at=CURRENT_TIMESTAMP, reference_links=?, status=?, team_id=?, visibility=? WHERE id=?
+        """, (title, command, description, note_type, category_id, approved, ref_links_json, status, team_id, visibility, note_id))
 
         if steps is not None:
             _save_steps(cursor, note_id, steps)
@@ -1045,6 +1192,10 @@ def delete_note(note_id):
         
         if user_role not in ['admin', 'moderator'] and not is_creator:
             return jsonify({'message': 'Permission denied'}), 403
+
+        # Verify team delete permission (non-admins must belong to note's team)
+        if user_role != 'admin' and note['team_id'] and int(note['team_id']) not in request.user.get('teams', []):
+            return jsonify({'message': 'Access denied: Note belongs to another team'}), 403
 
         # Collect image files to delete from disk
         cursor.execute("SELECT filename FROM note_images WHERE note_id = ?", (note_id,))

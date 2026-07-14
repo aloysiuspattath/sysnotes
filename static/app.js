@@ -54,6 +54,11 @@
     let currentToken = localStorage.getItem('sn_token') || null;
     let currentRole = localStorage.getItem('sn_role') || null;
     let currentUsername = localStorage.getItem('sn_username') || null;
+    let currentUserTeams = [];
+    try {
+        currentUserTeams = JSON.parse(localStorage.getItem('sn_teams') || '[]');
+    } catch(e) {}
+    let allTeams = [];
     let quillAdd = null;
     let quillEdit = null;
     let quillEditor = null;
@@ -234,9 +239,11 @@
 
     function doLogout() {
         currentToken = null; currentRole = null; currentUsername = null;
+        currentUserTeams = [];
         localStorage.removeItem('sn_token');
         localStorage.removeItem('sn_role');
         localStorage.removeItem('sn_username');
+        localStorage.removeItem('sn_teams');
         activePending = false;
         activeDrafts = false;
         updateAuthUI();
@@ -307,6 +314,7 @@
         if (tabId === 'ap-pending-tab') loadAdminPending();
         if (tabId === 'ap-categories-tab') loadAdminCategories();
         if (tabId === 'ap-users-tab') loadAdminUsers();
+        if (tabId === 'ap-teams-tab') fetchTeams();
         if (tabId === 'ap-settings-tab') loadAdminSettings();
         if (tabId === 'ap-audit-tab') loadAdminAudit();
     }
@@ -853,7 +861,54 @@
         if (st) st.textContent = data.total_tags || 0;
     }
 
-    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); updatePendingCount(); updateDraftCount(); }
+    async function fetchTeams() {
+        if (!currentToken) return;
+        const res = await apiFetch('api/admin/teams', { headers: authHeaders() });
+        if (!res) return;
+        if (res.ok) {
+            allTeams = await res.json();
+            populateTeamDropdowns(allTeams);
+            populateUserTeamChecklists(allTeams);
+            if (isAdminPageOpen) {
+                renderAdminTeamsTable(allTeams);
+            }
+        }
+    }
+
+    function populateTeamDropdowns(teams) {
+        const addTeamSelect = document.getElementById('add-note-team');
+        const editTeamSelect = document.getElementById('edit-note-team');
+        const editorTeamSelect = document.getElementById('editor-note-team');
+        
+        let optionsHtml = '';
+        teams.forEach(t => {
+            optionsHtml += `<option value="${t.id}">${escapeHTML(t.name)}</option>`;
+        });
+        
+        if (addTeamSelect) addTeamSelect.innerHTML = optionsHtml;
+        if (editTeamSelect) editTeamSelect.innerHTML = optionsHtml;
+        if (editorTeamSelect) editorTeamSelect.innerHTML = optionsHtml;
+    }
+
+    function populateUserTeamChecklists(teams) {
+        const createList = document.getElementById('ap-create-user-teams-list');
+        const modalList = document.getElementById('user-teams-checkbox-list');
+        
+        let html = '';
+        teams.forEach(t => {
+            html += `
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem;">
+                    <input type="checkbox" name="team_ids" value="${t.id}">
+                    <span>${escapeHTML(t.name)}</span>
+                </label>
+            `;
+        });
+        
+        if (createList) createList.innerHTML = html;
+        if (modalList) modalList.innerHTML = html;
+    }
+
+    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); fetchTeams(); updatePendingCount(); updateDraftCount(); }
 
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
@@ -1355,9 +1410,11 @@
             currentToken = data.token;
             currentRole = data.role;
             currentUsername = data.username;
+            currentUserTeams = data.teams || [];
             localStorage.setItem('sn_token', currentToken);
             localStorage.setItem('sn_role', currentRole);
             localStorage.setItem('sn_username', currentUsername);
+            localStorage.setItem('sn_teams', JSON.stringify(currentUserTeams));
             closeModal('login-modal');
             updateAuthUI();
             renderNotes(allNotes);
@@ -1391,6 +1448,9 @@
         const steps = noteType === 'procedure' ? collectSteps('add') : [];
         const reference_links = collectReferenceLinks('add');
 
+        const visibility = document.getElementById('add-note-visibility').value;
+        const teamId = visibility === 'team' ? document.getElementById('add-note-team').value : null;
+
         if (noteType === 'command' && !command) { showToast('Command is required', true); return; }
         if (noteType === 'procedure' && steps.length === 0) { showToast('At least one step is required', true); return; }
         if (noteType === 'plain') {
@@ -1406,7 +1466,9 @@
             description: description || null,
             category_id: categoryId ? parseInt(categoryId) : null,
             tags,
-            reference_links
+            reference_links,
+            visibility,
+            team_id: teamId ? parseInt(teamId) : null
         };
         if (noteType === 'command') body.command = command;
         if (noteType === 'procedure') body.steps = steps;
@@ -1548,6 +1610,11 @@
             setEditorNoteType('command');
             toggleEditorDocSource('file');
             document.getElementById('editor-revisions-panel').style.display = 'none';
+            document.getElementById('editor-note-visibility').value = 'global';
+            document.getElementById('editor-note-team-container').style.display = 'none';
+            if (currentUserTeams && currentUserTeams.length > 0) {
+                document.getElementById('editor-note-team').value = currentUserTeams[0];
+            }
         } else {
             document.getElementById('editor-revisions-panel').style.display = 'block';
             statusText.innerHTML = '<span class="status-dot"></span> Loading note...';
@@ -1561,6 +1628,15 @@
                     document.getElementById('editor-note-tags').value = (note.tags || []).join(', ');
                     document.getElementById('editor-note-status').value = note.status || 'published';
                     document.getElementById('editor-note-category').value = note.category_id || '';
+                    
+                    const visibility = note.visibility || 'global';
+                    document.getElementById('editor-note-visibility').value = visibility;
+                    if (visibility === 'team') {
+                        document.getElementById('editor-note-team-container').style.display = 'block';
+                        document.getElementById('editor-note-team').value = note.team_id || '';
+                    } else {
+                        document.getElementById('editor-note-team-container').style.display = 'none';
+                    }
                     
                     // Approval badge
                     const appRow = document.getElementById('editor-approval-status-row');
@@ -1712,13 +1788,18 @@
             title = "Untitled Note";
         }
 
+        const visibility = document.getElementById('editor-note-visibility').value;
+        const teamId = visibility === 'team' ? document.getElementById('editor-note-team').value : null;
+
         const body = {
             title, note_type: noteType,
             command: noteType === 'command' ? command : '',
             description, tags, status,
             steps: steps.map(s => ({ title: s.title, command: s.command, description: s.description, blocks: s.blocks })),
             reference_links,
-            is_autosave: isAutosave
+            is_autosave: isAutosave,
+            visibility,
+            team_id: teamId ? parseInt(teamId) : null
         };
 
         if (noteType === 'document') {
@@ -2006,11 +2087,18 @@
         users.forEach(u => {
             const isSelf = u.username === currentUsername;
             const isAD = u.auth_type === 'ad';
+            const teamBadges = (u.teams || []).map(t => `<span class="badge" style="background: rgba(var(--accent-rgb, 99, 102, 241), 0.15); color: var(--accent); border: 1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.3); font-size:0.75rem; margin-right:4px;">${escapeHTML(t.name)}</span>`).join('');
             html += `<tr>
                 <td>${escapeHTML(u.username)}${isSelf ? ' <span style="color:var(--accent);font-size:0.75rem;">(you)</span>' : ''}</td>
                 <td>
                     <span class="status-badge ${u.role === 'admin' ? 'enabled' : (u.role === 'moderator' ? 'moderator' : 'disabled')}">${escapeHTML(u.role)}</span>
                     <span class="status-badge" style="background:var(--bg-hover); color:var(--text-secondary); margin-left:4px;">${isAD ? 'AD' : 'Local'}</span>
+                </td>
+                <td>
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px;">
+                        ${teamBadges || '<span style="color:var(--text-muted);font-size:0.75rem;">None</span>'}
+                        <button class="btn btn-ghost edit-user-teams-btn" data-user-id="${u.id}" data-username="${escapeHTML(u.username)}" data-teams='${JSON.stringify((u.teams || []).map(t=>t.id))}' style="padding:2px 6px; font-size:0.72rem; min-height:0; height:auto; line-height:1; margin-left:4px;">Edit</button>
+                    </div>
                 </td>
                 <td>
                     <div style="display:flex; gap:8px; align-items:center;">
@@ -2028,6 +2116,25 @@
             </tr>`;
         });
         tbody.innerHTML = html;
+
+        tbody.querySelectorAll('.edit-user-teams-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const uid = btn.dataset.userId;
+                const username = btn.dataset.username;
+                const userTeamIds = JSON.parse(btn.dataset.teams || '[]');
+                
+                document.getElementById('user-teams-uid').value = uid;
+                document.getElementById('user-teams-username-label').textContent = `Assigned Teams for: ${username}`;
+                
+                // Check correct checkboxes in modal list
+                const listContainer = document.getElementById('user-teams-checkbox-list');
+                listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = userTeamIds.includes(parseInt(cb.value));
+                });
+                
+                openModal('user-teams-modal');
+            });
+        });
         
         tbody.querySelectorAll('.user-reset-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -2209,10 +2316,23 @@
         const username = document.getElementById('ap-create-user-username').value.trim();
         const password = document.getElementById('ap-create-user-password').value;
         const role = document.getElementById('ap-create-user-role').value;
-        const res = await apiFetch('api/users', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ username, password, role }) });
+        const auth_type = document.getElementById('ap-create-user-auth').value;
+
+        const listContainer = document.getElementById('ap-create-user-teams-list');
+        const checkedBoxes = listContainer ? listContainer.querySelectorAll('input[type="checkbox"]:checked') : [];
+        const teamIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+
+        const res = await apiFetch('api/users', { 
+            method: 'POST', 
+            headers: authHeaders(), 
+            body: JSON.stringify({ username, password, role, auth_type, team_ids: teamIds }) 
+        });
         if (!res) return;
         if (!res.ok) { const err = await res.json().catch(() => ({})); showToast(err.message || 'Failed to create user', true); return; }
         document.getElementById('ap-create-user-form').reset();
+        if (listContainer) {
+            listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
         showToast('User created!'); loadAdminUsers();
     }
 
@@ -2351,6 +2471,9 @@
         fetchCategories();
         fetchTags();
         fetchNotes();
+        fetchTeams();
+        setupVisibilityListeners();
+        bindTeamsEventListeners();
 
         // Note type toggles (form)
         initNoteTypeToggle('add');
@@ -2628,6 +2751,109 @@
             </tr>`;
         });
         tbody.innerHTML = html;
+    }
+
+    function setupVisibilityListeners() {
+        ['add', 'edit', 'editor'].forEach(prefix => {
+            const visSelect = document.getElementById(`${prefix}-note-visibility`);
+            const teamContainer = document.getElementById(`${prefix}-note-team-container`);
+            if (visSelect && teamContainer) {
+                visSelect.addEventListener('change', () => {
+                    if (visSelect.value === 'team') {
+                        teamContainer.style.display = 'block';
+                    } else {
+                        teamContainer.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+
+    function renderAdminTeamsTable(teams) {
+        const tbody = document.getElementById('ap-teams-tbody');
+        if (!tbody) return;
+        let html = '';
+        teams.forEach(t => {
+            const dateStr = t.created_at ? new Date(t.created_at + 'Z').toLocaleString() : '-';
+            html += `<tr>
+                <td style="font-weight:600;">${escapeHTML(t.name)}</td>
+                <td>${escapeHTML(t.description || '-')}</td>
+                <td style="font-size:0.85rem; color:var(--text-secondary);">${dateStr}</td>
+                <td>
+                    <button class="btn-icon btn-icon-danger delete-team-btn" data-team-id="${t.id}">${ICONS.trash}</button>
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+
+        tbody.querySelectorAll('.delete-team-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this team? Users will be deallocated and notes in this team will become orphaned.')) return;
+                const res = await apiFetch('api/admin/teams/' + btn.dataset.teamId, { method: 'DELETE', headers: authHeaders() });
+                if (res && res.ok) {
+                    showToast('Team deleted successfully');
+                    fetchTeams();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showToast(err.message || 'Failed to delete team', true);
+                }
+            });
+        });
+    }
+
+    async function handleCreateTeam(e) {
+        e.preventDefault();
+        const name = document.getElementById('ap-create-team-name').value.trim();
+        const description = document.getElementById('ap-create-team-desc').value.trim();
+        if (!name) return;
+
+        const res = await apiFetch('api/admin/teams', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ name, description })
+        });
+        if (res && res.ok) {
+            showToast('Team created successfully!');
+            document.getElementById('ap-create-team-form').reset();
+            fetchTeams();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to create team', true);
+        }
+    }
+
+    async function handleUserTeamsSubmit(e) {
+        e.preventDefault();
+        const uid = document.getElementById('user-teams-uid').value;
+        const listContainer = document.getElementById('user-teams-checkbox-list');
+        const checkedBoxes = listContainer.querySelectorAll('input[type="checkbox"]:checked');
+        const teamIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+
+        const res = await apiFetch(`api/users/${uid}`, {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify({ team_ids: teamIds })
+        });
+        if (res && res.ok) {
+            showToast('User teams updated successfully!');
+            closeModal('user-teams-modal');
+            loadAdminUsers();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showToast(err.message || 'Failed to update user teams', true);
+        }
+    }
+
+    function bindTeamsEventListeners() {
+        const createTeamForm = document.getElementById('ap-create-team-form');
+        if (createTeamForm) {
+            createTeamForm.addEventListener('submit', handleCreateTeam);
+        }
+        
+        const userTeamsForm = document.getElementById('user-teams-form');
+        if (userTeamsForm) {
+            userTeamsForm.addEventListener('submit', handleUserTeamsSubmit);
+        }
     }
 
 })();

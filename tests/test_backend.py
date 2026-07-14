@@ -369,5 +369,92 @@ class BackendTestCase(unittest.TestCase):
         self.assertIsNotNone(log)
         self.assertIn("Restored note to revision", log['details'])
 
+    # 7. Team isolation and segregation tests
+    def test_team_isolation_and_segregation(self):
+        # Create two teams
+        self.cursor.execute("INSERT INTO teams (name, description) VALUES ('Team A', 'Description A')")
+        team_a_id = self.cursor.lastrowid
+        self.cursor.execute("INSERT INTO teams (name, description) VALUES ('Team B', 'Description B')")
+        team_b_id = self.cursor.lastrowid
+        self.conn.commit()
+
+        # Allocate user 'author1' to Team A
+        headers_admin = {'Authorization': f'Bearer {self.admin_token}'}
+        response = self.client.put(f'/api/users/{self.author1_id}', json={
+            'team_ids': [team_a_id]
+        }, headers=headers_admin)
+        self.assertEqual(response.status_code, 200)
+
+        # Allocate user 'author2' to Team B
+        response = self.client.put(f'/api/users/{self.author2_id}', json={
+            'team_ids': [team_b_id]
+        }, headers=headers_admin)
+        self.assertEqual(response.status_code, 200)
+
+        # Re-login users to refresh their JWT tokens with team claims
+        self.author1_token = self._login_and_get_token("author1", "Author123")
+        self.author2_token = self._login_and_get_token("author2", "Author123")
+
+        headers_author1 = {'Authorization': f'Bearer {self.author1_token}'}
+        headers_author2 = {'Authorization': f'Bearer {self.author2_token}'}
+
+        # 1. Create a Global Note (approved)
+        response = self.client.post('/api/notes', json={
+            'title': 'Global Note',
+            'note_type': 'command',
+            'command': 'echo global',
+            'visibility': 'global'
+        }, headers=headers_author1)
+        global_note_id = response.get_json()['id']
+        self.client.post(f'/api/notes/{global_note_id}/approve', headers=headers_admin)
+
+        # 2. Create a Team A Note (approved)
+        response = self.client.post('/api/notes', json={
+            'title': 'Team A Note',
+            'note_type': 'command',
+            'command': 'echo teamA',
+            'visibility': 'team',
+            'team_id': team_a_id
+        }, headers=headers_author1)
+        team_a_note_id = response.get_json()['id']
+        self.client.post(f'/api/notes/{team_a_note_id}/approve', headers=headers_admin)
+
+        # 3. Create a Team B Note (approved)
+        response = self.client.post('/api/notes', json={
+            'title': 'Team B Note',
+            'note_type': 'command',
+            'command': 'echo teamB',
+            'visibility': 'team',
+            'team_id': team_b_id
+        }, headers=headers_author2)
+        team_b_note_id = response.get_json()['id']
+        self.client.post(f'/api/notes/{team_b_note_id}/approve', headers=headers_admin)
+
+        # Verify Author 1 (Team A) list notes:
+        # Should see Global Note and Team A Note, but NOT Team B Note.
+        response = self.client.get('/api/notes', headers=headers_author1)
+        notes_author1 = response.get_json()
+        note_ids_author1 = [n['id'] for n in notes_author1]
+        self.assertIn(global_note_id, note_ids_author1)
+        self.assertIn(team_a_note_id, note_ids_author1)
+        self.assertNotIn(team_b_note_id, note_ids_author1)
+
+        # Verify Author 2 (Team B) list notes:
+        # Should see Global Note and Team B Note, but NOT Team A Note.
+        response = self.client.get('/api/notes', headers=headers_author2)
+        notes_author2 = response.get_json()
+        note_ids_author2 = [n['id'] for n in notes_author2]
+        self.assertIn(global_note_id, note_ids_author2)
+        self.assertIn(team_b_note_id, note_ids_author2)
+        self.assertNotIn(team_a_note_id, note_ids_author2)
+
+        # Verify direct endpoint access controls:
+        # Author 1 can view Team A note, but access denied for Team B note.
+        response = self.client.get(f'/api/notes/{team_a_note_id}', headers=headers_author1)
+        self.assertEqual(response.status_code, 200)
+        
+        response = self.client.get(f'/api/notes/{team_b_note_id}', headers=headers_author1)
+        self.assertEqual(response.status_code, 403)
+
 if __name__ == '__main__':
     unittest.main()

@@ -1296,6 +1296,15 @@
                         <span>${esc(note.created_by_username || 'Unknown')}</span>
                     </li>
                     <li class="bento-meta-item">
+                        <span class="bento-meta-label">👁️ Visibility:</span>
+                        <span>
+                            ${note.visibility === 'team' 
+                                ? `<span class="badge badge-warning" style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); border: 1px solid rgba(245, 158, 11, 0.3); font-size:0.72rem; font-weight:600; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center;">🔒 ${esc(note.team_name || 'Restricted')}</span>`
+                                : `<span class="badge badge-success" style="background: rgba(16, 185, 129, 0.15); color: rgb(16, 185, 129); border: 1px solid rgba(16, 185, 129, 0.3); font-size:0.72rem; font-weight:600; padding:2px 6px; border-radius:4px; display:inline-flex; align-items:center;">🌐 Global</span>`
+                            }
+                        </span>
+                    </li>
+                    <li class="bento-meta-item">
                         <span class="bento-meta-label">📅 Created:</span>
                         <span>${createdDate}</span>
                     </li>
@@ -1403,9 +1412,14 @@
             });
         }
 
+        function authHeaders() {
+            const token = localStorage.getItem('sn_token');
+            return token ? { 'Authorization': 'Bearer ' + token } : {};
+        }
+
         // ── Fetch & init ──────────────────────────────────
         const noteId = {{ note_id }};
-        fetch('api/notes/' + noteId)
+        fetch('api/notes/' + noteId, { headers: authHeaders() })
             .then(r => {
                 if (!r.ok) throw new Error('Not found');
                 return r.json();
@@ -1421,7 +1435,7 @@
             if (!container) return;
             
             try {
-                const res = await fetch(`/api/notes/${id}/audit`);
+                const res = await fetch(`/api/notes/${id}/audit`, { headers: authHeaders() });
                 if (!res.ok) return;
                 const logs = await res.json();
                 if (!logs || logs.length === 0) {

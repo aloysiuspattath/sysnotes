@@ -48,6 +48,27 @@ def init_db():
     if 'locked_until' not in user_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN locked_until DATETIME")
 
+    # Teams table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # User Teams junction table (Many-to-Many)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_teams (
+            user_id INTEGER NOT NULL,
+            team_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, team_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+        )
+    ''')
+
     # Settings table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS settings (
@@ -86,8 +107,11 @@ def init_db():
             created_by INTEGER,
             reference_links TEXT DEFAULT '[]',
             status TEXT DEFAULT 'published',
+            team_id INTEGER,
+            visibility TEXT DEFAULT 'global',
             FOREIGN KEY (category_id) REFERENCES categories(id),
-            FOREIGN KEY (created_by) REFERENCES users(id)
+            FOREIGN KEY (created_by) REFERENCES users(id),
+            FOREIGN KEY (team_id) REFERENCES teams(id)
         )
     ''')
 
@@ -102,6 +126,10 @@ def init_db():
         cursor.execute("ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'published'")
     if 'reference_links' not in note_cols:
         cursor.execute("ALTER TABLE notes ADD COLUMN reference_links TEXT DEFAULT '[]'")
+    if 'team_id' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN team_id INTEGER")
+    if 'visibility' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN visibility TEXT DEFAULT 'global'")
 
     # Revisions table
     cursor.execute('''
@@ -117,7 +145,10 @@ def init_db():
             steps TEXT DEFAULT '[]',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             created_by INTEGER,
-            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+            team_id INTEGER,
+            visibility TEXT DEFAULT 'global',
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
         )
     ''')
 
@@ -128,6 +159,10 @@ def init_db():
         cursor.execute("ALTER TABLE note_revisions ADD COLUMN reference_links TEXT DEFAULT '[]'")
     if 'steps' not in rev_cols:
         cursor.execute("ALTER TABLE note_revisions ADD COLUMN steps TEXT DEFAULT '[]'")
+    if 'team_id' not in rev_cols:
+        cursor.execute("ALTER TABLE note_revisions ADD COLUMN team_id INTEGER")
+    if 'visibility' not in rev_cols:
+        cursor.execute("ALTER TABLE note_revisions ADD COLUMN visibility TEXT DEFAULT 'global'")
 
     # Migration: update existing 'user' roles to 'author'
     cursor.execute("UPDATE users SET role = 'author' WHERE role = 'user'")
@@ -287,6 +322,87 @@ def init_db():
             ("admin", admin_hash, "admin", "local")
         )
 
+    # Seed default team if no teams exist
+    cursor.execute("SELECT COUNT(*) FROM teams")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO teams (name, description) VALUES ('Default Team', 'Default department team for all users')")
+        default_team_id = cursor.lastrowid
+        # Assign all existing users to the default team
+        cursor.execute("SELECT id FROM users")
+        user_ids = [row[0] for row in cursor.fetchall()]
+        for uid in user_ids:
+            cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (uid, default_team_id))
+
+    conn.commit()
+    close_db(conn)
+
+def get_user_teams(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT t.id, t.name, t.description 
+        FROM teams t 
+        JOIN user_teams ut ON t.id = ut.team_id 
+        WHERE ut.user_id = ?
+    ''', (user_id,))
+    rows = cursor.fetchall()
+    close_db(conn)
+    return [{'id': r[0], 'name': r[1], 'description': r[2]} for r in rows]
+
+def set_user_teams(user_id, team_ids):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_teams WHERE user_id = ?", (user_id,))
+    for tid in team_ids:
+        cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (user_id, tid))
+    conn.commit()
+    close_db(conn)
+
+def get_all_teams():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, description, created_at FROM teams ORDER BY name ASC")
+    rows = cursor.fetchall()
+    close_db(conn)
+    return [{'id': r[0], 'name': r[1], 'description': r[2], 'created_at': r[3]} for r in rows]
+
+def create_team(name, description):
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO teams (name, description) VALUES (?, ?)", (name, description))
+        conn.commit()
+        tid = cursor.lastrowid
+        close_db(conn)
+        return tid
+    except Exception as e:
+        close_db(conn)
+        raise e
+
+def delete_team(team_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    # Check if there is only 1 team left (to prevent deletion of the last team)
+    cursor.execute("SELECT COUNT(*) FROM teams")
+    if cursor.fetchone()[0] <= 1:
+        close_db(conn)
+        raise ValueError("Cannot delete the only remaining team in the department.")
+    
+    # Reassign orphaned users to another team
+    cursor.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+    cursor.execute("SELECT id FROM teams LIMIT 1")
+    fallback_team_id = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT id FROM users")
+    uids = [row[0] for row in cursor.fetchall()]
+    for uid in uids:
+        cursor.execute("SELECT COUNT(*) FROM user_teams WHERE user_id = ?", (uid,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (uid, fallback_team_id))
+            
+    # Reassign notes belonging to deleted team to NULL
+    cursor.execute("UPDATE notes SET team_id = NULL WHERE team_id = ?", (team_id,))
+    cursor.execute("UPDATE note_revisions SET team_id = NULL WHERE team_id = ?", (team_id,))
     conn.commit()
     close_db(conn)
 
