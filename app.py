@@ -1541,8 +1541,11 @@ def add_security_headers(response):
         "connect-src 'self'"
     )
     response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-    # Disable caching for all responses to prevent stale browser assets during dev/updates
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    # Enable caching for static assets for high performance in production; relies on query parameters (e.g. ?v=X) to bust cache on updates
+    if request.path.startswith('/static/') or request.path.startswith('/uploads/'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000' # Cache for 1 year
+    else:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return response
 
 
