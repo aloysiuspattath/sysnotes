@@ -898,6 +898,7 @@
         if (addTeamSelect) addTeamSelect.innerHTML = optionsHtml;
         if (editTeamSelect) editTeamSelect.innerHTML = optionsHtml;
         if (editorTeamSelect) editorTeamSelect.innerHTML = optionsHtml;
+        initCustomSelects();
     }
 
     function populateUserTeamChecklists(teams) {
@@ -1126,6 +1127,7 @@
             enabledCats.forEach(cat => { sel.innerHTML += `<option value="${cat.id}">${escapeHTML(cat.name)}</option>`; });
             sel.value = cur;
         });
+        initCustomSelects();
     }
 
     // ─── RENDER: NOTES ───────────────────────────────────
@@ -1456,6 +1458,8 @@
                 teamSelect.innerHTML = `<option value="all" selected>All My Teams</option>` +
                     currentUserTeams.map(t => `<option value="${escapeHTML(t.name)}">${escapeHTML(t.name)}</option>`).join('');
                 
+                initCustomSelects();
+                
                 document.getElementById('login-step-1').style.display = 'none';
                 document.getElementById('login-step-2').style.display = 'block';
                 return;
@@ -1626,6 +1630,7 @@
         allCategories.filter(c => c.enabled).forEach(c => {
             catSelect.innerHTML += `<option value="${c.id}">${escapeHTML(c.name)}</option>`;
         });
+        initCustomSelects();
 
         // Reset inputs
         document.getElementById('editor-note-id').value = '';
@@ -1658,6 +1663,7 @@
             if (currentUserTeams && currentUserTeams.length > 0) {
                 document.getElementById('editor-note-team').value = currentUserTeams[0];
             }
+            syncCustomSelects();
         } else {
             document.getElementById('editor-revisions-panel').style.display = 'block';
             statusText.innerHTML = '<span class="status-dot"></span> Loading note...';
@@ -1732,6 +1738,8 @@
                     }
 
                     fetchEditorRevisions(note.id);
+                    initCustomSelects();
+                    syncCustomSelects();
                     statusText.innerHTML = '<span class="status-dot"></span> Draft loaded';
                     statusText.className = 'editor-autosave-status saved';
                 }
@@ -2723,6 +2731,16 @@
                 document.querySelectorAll('.img-lightbox-overlay').forEach(el => el.remove());
             }
         });
+
+        // Initialize custom select styling
+        initCustomSelects();
+
+        // Close custom select dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.custom-select-wrapper.open').forEach(wrapper => {
+                wrapper.classList.remove('open');
+            });
+        });
     });
 
     // Auto-refresh polling
@@ -2932,7 +2950,116 @@
                     teams: currentUserTeams
                 });
             });
-        }
     }
+
+    function initCustomSelects() {
+        document.querySelectorAll('select.form-select, select.form-select-sm').forEach(select => {
+            // Check if wrapper already exists
+            let wrapper = select.closest('.custom-select-wrapper');
+            let trigger, optionsContainer;
+            
+            if (!wrapper) {
+                // Wrap standard select element
+                wrapper = document.createElement('div');
+                wrapper.className = 'custom-select-wrapper';
+                if (select.classList.contains('form-select-sm')) {
+                    wrapper.classList.add('custom-select-sm');
+                }
+                select.parentNode.insertBefore(wrapper, select);
+                wrapper.appendChild(select);
+                
+                // Create trigger element
+                trigger = document.createElement('div');
+                trigger.className = 'custom-select-trigger';
+                trigger.innerHTML = `<span>Select...</span>`;
+                wrapper.appendChild(trigger);
+                
+                // Create custom options container
+                optionsContainer = document.createElement('div');
+                optionsContainer.className = 'custom-select-options';
+                wrapper.appendChild(optionsContainer);
+                
+                // Toggle dropdown menu visibility on trigger click
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Close all other custom selects first
+                    document.querySelectorAll('.custom-select-wrapper.open').forEach(openWrapper => {
+                        if (openWrapper !== wrapper) {
+                            openWrapper.classList.remove('open');
+                        }
+                    });
+                    wrapper.classList.toggle('open');
+                });
+            } else {
+                trigger = wrapper.querySelector('.custom-select-trigger');
+                optionsContainer = wrapper.querySelector('.custom-select-options');
+            }
+            
+            // Build options list dynamically
+            const selectOptions = Array.from(select.options);
+            optionsContainer.innerHTML = '';
+            
+            selectOptions.forEach(opt => {
+                const optEl = document.createElement('div');
+                optEl.className = 'custom-select-option';
+                optEl.dataset.value = opt.value;
+                optEl.textContent = opt.textContent;
+                
+                if (opt.selected) {
+                    optEl.classList.add('selected');
+                    trigger.querySelector('span').textContent = opt.textContent;
+                }
+                
+                optEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    
+                    // Update native select and trigger change
+                    select.value = opt.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    
+                    // Update custom UI state
+                    optionsContainer.querySelectorAll('.custom-select-option').forEach(el => el.classList.remove('selected'));
+                    optEl.classList.add('selected');
+                    trigger.querySelector('span').textContent = opt.textContent;
+                    
+                    // Close menu
+                    wrapper.classList.remove('open');
+                });
+                optionsContainer.appendChild(optEl);
+            });
+            
+            // Set default trigger if none is selected
+            if (!selectOptions.some(o => o.selected) && selectOptions.length > 0) {
+                selectOptions[0].selected = true;
+                trigger.querySelector('span').textContent = selectOptions[0].textContent;
+                const firstOptEl = optionsContainer.querySelector('.custom-select-option');
+                if (firstOptEl) firstOptEl.classList.add('selected');
+            }
+        });
+    }
+
+    function syncCustomSelects() {
+        document.querySelectorAll('select.form-select, select.form-select-sm').forEach(select => {
+            const wrapper = select.closest('.custom-select-wrapper');
+            if (!wrapper) return;
+            const trigger = wrapper.querySelector('.custom-select-trigger');
+            const optionsContainer = wrapper.querySelector('.custom-select-options');
+            if (!trigger || !optionsContainer) return;
+            
+            // Mark correct selected element in custom list
+            optionsContainer.querySelectorAll('.custom-select-option').forEach(optEl => {
+                if (optEl.dataset.value === select.value) {
+                    optEl.classList.add('selected');
+                    trigger.querySelector('span').textContent = optEl.textContent;
+                } else {
+                    optEl.classList.remove('selected');
+                }
+            });
+        });
+    }
+
+    // Expose helpers globally for testing or dynamic rendering needs
+    window.initCustomSelects = initCustomSelects;
+    window.syncCustomSelects = syncCustomSelects;
 
 })();
