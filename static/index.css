@@ -2811,6 +2811,17 @@ body.in-editor .main-content {
     transform: translateY(0);
 }
 
+/* Open upwards variant */
+.custom-select-wrapper.open-up .custom-select-options {
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform: translateY(8px);
+}
+
+.custom-select-wrapper.open-up.open .custom-select-options {
+    transform: translateY(0);
+}
+
 .custom-select-option {
     padding: 10px 16px;
     cursor: pointer;

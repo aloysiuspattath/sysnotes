@@ -2989,6 +2989,19 @@
                             openWrapper.classList.remove('open');
                         }
                     });
+                    
+                    if (!wrapper.classList.contains('open')) {
+                        const rect = trigger.getBoundingClientRect();
+                        const spaceBelow = window.innerHeight - rect.bottom;
+                        const spaceNeeded = 260; // Max height of dropdown
+                        
+                        if (spaceBelow < spaceNeeded && rect.top > spaceNeeded) {
+                            wrapper.classList.add('open-up');
+                        } else {
+                            wrapper.classList.remove('open-up');
+                        }
+                    }
+                    
                     wrapper.classList.toggle('open');
                 });
             } else {
