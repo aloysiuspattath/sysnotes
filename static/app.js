@@ -2953,16 +2953,45 @@
         }
     }
 
+    function closeDropdown(wrapper) {
+        const selectId = wrapper.dataset.selectId;
+        const optionsContainer = wrapper.querySelector('.custom-select-options') || 
+            document.body.querySelector(`.custom-select-options[data-select-id="${selectId}"]`);
+            
+        if (!optionsContainer) return;
+        
+        optionsContainer.style.opacity = '0';
+        optionsContainer.style.transform = '';
+        
+        setTimeout(() => {
+            optionsContainer.style.visibility = 'hidden';
+            optionsContainer.style.display = 'none';
+            // Return back to wrapper
+            wrapper.appendChild(optionsContainer);
+            optionsContainer.style.position = '';
+            optionsContainer.style.width = '';
+            optionsContainer.style.top = '';
+            optionsContainer.style.left = '';
+            optionsContainer.style.right = '';
+            optionsContainer.style.zIndex = '';
+            wrapper.classList.remove('open');
+            wrapper.classList.remove('open-up');
+        }, 150);
+    }
+
     function initCustomSelects() {
-        document.querySelectorAll('select.form-select, select.form-select-sm').forEach(select => {
+        document.querySelectorAll('select.form-select, select.form-select-sm').forEach((select, selectIdx) => {
             // Check if wrapper already exists
             let wrapper = select.closest('.custom-select-wrapper');
             let trigger, optionsContainer;
+            
+            const selectId = select.id || `cs-uniq-${selectIdx}`;
             
             if (!wrapper) {
                 // Wrap standard select element
                 wrapper = document.createElement('div');
                 wrapper.className = 'custom-select-wrapper';
+                wrapper.dataset.selectId = selectId;
                 if (select.classList.contains('form-select-sm')) {
                     wrapper.classList.add('custom-select-sm');
                 }
@@ -2978,35 +3007,70 @@
                 // Create custom options container
                 optionsContainer = document.createElement('div');
                 optionsContainer.className = 'custom-select-options';
+                optionsContainer.dataset.selectId = selectId;
                 wrapper.appendChild(optionsContainer);
                 
                 // Toggle dropdown menu visibility on trigger click
                 trigger.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    const isOpen = wrapper.classList.contains('open');
+                    
                     // Close all other custom selects first
                     document.querySelectorAll('.custom-select-wrapper.open').forEach(openWrapper => {
                         if (openWrapper !== wrapper) {
-                            openWrapper.classList.remove('open');
+                            closeDropdown(openWrapper);
                         }
                     });
                     
-                    if (!wrapper.classList.contains('open')) {
-                        const rect = trigger.getBoundingClientRect();
-                        const spaceBelow = window.innerHeight - rect.bottom;
-                        const spaceNeeded = 260; // Max height of dropdown
+                    if (!isOpen) {
+                        wrapper.classList.add('open');
                         
-                        if (spaceBelow < spaceNeeded && rect.top > spaceNeeded) {
+                        // Portal options container directly to document.body
+                        document.body.appendChild(optionsContainer);
+                        
+                        // Calculate coordinates
+                        const triggerRect = trigger.getBoundingClientRect();
+                        
+                        optionsContainer.style.position = 'fixed';
+                        optionsContainer.style.width = `${triggerRect.width}px`;
+                        optionsContainer.style.left = `${triggerRect.left}px`;
+                        optionsContainer.style.right = 'auto';
+                        optionsContainer.style.zIndex = '999999';
+                        optionsContainer.style.display = 'block';
+                        
+                        // Get actual height
+                        const optionsHeight = optionsContainer.offsetHeight || 160;
+                        
+                        // Decide open direction (up or down)
+                        const spaceBelow = window.innerHeight - triggerRect.bottom;
+                        const spaceNeeded = optionsHeight + 10;
+                        const openUp = (spaceBelow < spaceNeeded && triggerRect.top > spaceNeeded);
+                        
+                        if (openUp) {
                             wrapper.classList.add('open-up');
+                            optionsContainer.style.top = `${triggerRect.top - optionsHeight - 6}px`;
+                            optionsContainer.style.transform = 'translateY(8px)';
                         } else {
                             wrapper.classList.remove('open-up');
+                            optionsContainer.style.top = `${triggerRect.bottom + 6}px`;
+                            optionsContainer.style.transform = 'translateY(-8px)';
                         }
+                        
+                        // Force layout reflow
+                        optionsContainer.offsetHeight;
+                        
+                        optionsContainer.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+                        optionsContainer.style.visibility = 'visible';
+                        optionsContainer.style.opacity = '1';
+                        optionsContainer.style.transform = 'translateY(0)';
+                    } else {
+                        closeDropdown(wrapper);
                     }
-                    
-                    wrapper.classList.toggle('open');
                 });
             } else {
                 trigger = wrapper.querySelector('.custom-select-trigger');
-                optionsContainer = wrapper.querySelector('.custom-select-options');
+                optionsContainer = wrapper.querySelector('.custom-select-options') || 
+                    document.body.querySelector(`.custom-select-options[data-select-id="${selectId}"]`);
             }
             
             // Build options list dynamically
@@ -3037,7 +3101,7 @@
                     trigger.querySelector('span').textContent = opt.textContent;
                     
                     // Close menu
-                    wrapper.classList.remove('open');
+                    closeDropdown(wrapper);
                 });
                 optionsContainer.appendChild(optEl);
             });
@@ -3056,8 +3120,10 @@
         document.querySelectorAll('select.form-select, select.form-select-sm').forEach(select => {
             const wrapper = select.closest('.custom-select-wrapper');
             if (!wrapper) return;
+            const selectId = wrapper.dataset.selectId;
             const trigger = wrapper.querySelector('.custom-select-trigger');
-            const optionsContainer = wrapper.querySelector('.custom-select-options');
+            const optionsContainer = wrapper.querySelector('.custom-select-options') || 
+                document.body.querySelector(`.custom-select-options[data-select-id="${selectId}"]`);
             if (!trigger || !optionsContainer) return;
             
             // Mark correct selected element in custom list
@@ -3072,8 +3138,15 @@
         });
     }
 
-    // Expose helpers globally for testing or dynamic rendering needs
+    // Expose helpers globally
     window.initCustomSelects = initCustomSelects;
     window.syncCustomSelects = syncCustomSelects;
+    window.closeAllCustomSelects = () => {
+        document.querySelectorAll('.custom-select-wrapper.open').forEach(closeDropdown);
+    };
+
+    // Close open dropdowns on page or modal scroll to keep fixed alignment accurate
+    window.addEventListener('scroll', window.closeAllCustomSelects, { passive: true });
+    document.addEventListener('scroll', window.closeAllCustomSelects, { capture: true, passive: true });
 
 })();
