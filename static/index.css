@@ -2822,6 +2822,28 @@ body.in-editor .main-content {
     transform: translateY(0);
 }
 
+/* In-flow dropdowns inside modals to automatically adjust form height */
+.modal .custom-select-wrapper .custom-select-options,
+.custom-select-wrapper.in-flow .custom-select-options {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    box-shadow: none !important;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    opacity: 0;
+    visibility: hidden;
+    display: none;
+    transition: opacity 0.15s ease;
+}
+
+.modal .custom-select-wrapper.open .custom-select-options,
+.custom-select-wrapper.in-flow.open .custom-select-options {
+    display: block !important;
+}
+
 .custom-select-option {
     padding: 10px 16px;
     cursor: pointer;

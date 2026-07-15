@@ -3014,57 +3014,89 @@
                 trigger.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const isOpen = wrapper.classList.contains('open');
+                    const isInFlow = wrapper.closest('.modal') || wrapper.classList.contains('in-flow');
                     
                     // Close all other custom selects first
                     document.querySelectorAll('.custom-select-wrapper.open').forEach(openWrapper => {
                         if (openWrapper !== wrapper) {
-                            closeDropdown(openWrapper);
+                            if (openWrapper.closest('.modal') || openWrapper.classList.contains('in-flow')) {
+                                const sId = openWrapper.dataset.selectId;
+                                const oCont = openWrapper.querySelector('.custom-select-options') || 
+                                    document.body.querySelector(`.custom-select-options[data-select-id="${sId}"]`);
+                                if (oCont) {
+                                    oCont.style.opacity = '0';
+                                    setTimeout(() => {
+                                        oCont.style.visibility = 'hidden';
+                                        oCont.style.display = 'none';
+                                        openWrapper.classList.remove('open');
+                                    }, 150);
+                                }
+                            } else {
+                                closeDropdown(openWrapper);
+                            }
                         }
                     });
                     
                     if (!isOpen) {
                         wrapper.classList.add('open');
                         
-                        // Portal options container directly to document.body
-                        document.body.appendChild(optionsContainer);
-                        
-                        // Calculate coordinates
-                        const triggerRect = trigger.getBoundingClientRect();
-                        
-                        optionsContainer.style.position = 'fixed';
-                        optionsContainer.style.width = `${triggerRect.width}px`;
-                        optionsContainer.style.left = `${triggerRect.left}px`;
-                        optionsContainer.style.right = 'auto';
-                        optionsContainer.style.zIndex = '999999';
-                        optionsContainer.style.display = 'block';
-                        
-                        // Get actual height
-                        const optionsHeight = optionsContainer.offsetHeight || 160;
-                        
-                        // Decide open direction (up or down)
-                        const spaceBelow = window.innerHeight - triggerRect.bottom;
-                        const spaceNeeded = optionsHeight + 10;
-                        const openUp = (spaceBelow < spaceNeeded && triggerRect.top > spaceNeeded);
-                        
-                        if (openUp) {
-                            wrapper.classList.add('open-up');
-                            optionsContainer.style.top = `${triggerRect.top - optionsHeight - 6}px`;
-                            optionsContainer.style.transform = 'translateY(8px)';
+                        if (!isInFlow) {
+                            // Portal options container directly to document.body
+                            document.body.appendChild(optionsContainer);
+                            
+                            // Calculate coordinates
+                            const triggerRect = trigger.getBoundingClientRect();
+                            
+                            optionsContainer.style.position = 'fixed';
+                            optionsContainer.style.width = `${triggerRect.width}px`;
+                            optionsContainer.style.left = `${triggerRect.left}px`;
+                            optionsContainer.style.right = 'auto';
+                            optionsContainer.style.zIndex = '999999';
+                            optionsContainer.style.display = 'block';
+                            
+                            // Get actual height
+                            const optionsHeight = optionsContainer.offsetHeight || 160;
+                            
+                            // Decide open direction (up or down)
+                            const spaceBelow = window.innerHeight - triggerRect.bottom;
+                            const spaceNeeded = optionsHeight + 10;
+                            const openUp = (spaceBelow < spaceNeeded && triggerRect.top > spaceNeeded);
+                            
+                            if (openUp) {
+                                wrapper.classList.add('open-up');
+                                optionsContainer.style.top = `${triggerRect.top - optionsHeight - 6}px`;
+                                optionsContainer.style.transform = 'translateY(8px)';
+                            } else {
+                                wrapper.classList.remove('open-up');
+                                optionsContainer.style.top = `${triggerRect.bottom + 6}px`;
+                                optionsContainer.style.transform = 'translateY(-8px)';
+                            }
+                            
+                            // Force layout reflow
+                            optionsContainer.offsetHeight;
+                            
+                            optionsContainer.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+                            optionsContainer.style.visibility = 'visible';
+                            optionsContainer.style.opacity = '1';
+                            optionsContainer.style.transform = 'translateY(0)';
                         } else {
-                            wrapper.classList.remove('open-up');
-                            optionsContainer.style.top = `${triggerRect.bottom + 6}px`;
-                            optionsContainer.style.transform = 'translateY(-8px)';
+                            // In-flow rendering: keep in-place and show as block
+                            optionsContainer.style.display = 'block';
+                            optionsContainer.offsetHeight; // reflow
+                            optionsContainer.style.visibility = 'visible';
+                            optionsContainer.style.opacity = '1';
                         }
-                        
-                        // Force layout reflow
-                        optionsContainer.offsetHeight;
-                        
-                        optionsContainer.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
-                        optionsContainer.style.visibility = 'visible';
-                        optionsContainer.style.opacity = '1';
-                        optionsContainer.style.transform = 'translateY(0)';
                     } else {
-                        closeDropdown(wrapper);
+                        if (!isInFlow) {
+                            closeDropdown(wrapper);
+                        } else {
+                            optionsContainer.style.opacity = '0';
+                            setTimeout(() => {
+                                optionsContainer.style.visibility = 'hidden';
+                                optionsContainer.style.display = 'none';
+                                wrapper.classList.remove('open');
+                            }, 150);
+                        }
                     }
                 });
             } else {
