@@ -2950,6 +2950,7 @@
                     teams: currentUserTeams
                 });
             });
+        }
     }
 
     function initCustomSelects() {
