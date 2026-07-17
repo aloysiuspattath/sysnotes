@@ -283,6 +283,7 @@
         document.getElementById('notes-container').style.display = 'none';
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = 'none';
+        setupCategoryCarouselDots();
         document.getElementById('admin-page').style.display = 'block';
 
         const optPending = document.getElementById('opt-pending-tab-btn');
@@ -321,6 +322,7 @@
         document.getElementById('admin-page').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = '';
         document.getElementById('notes-container').style.display = '';
+        setupCategoryCarouselDots();
         renderNotes(allNotes);
     }
 
@@ -977,7 +979,71 @@
                 updateSidebarFavoritesUI();
             });
         });
+        setTimeout(setupCategoryCarouselDots, 50);
     }
+
+    function setupCategoryCarouselDots() {
+        const grid = document.getElementById('category-cards-grid');
+        const dotsContainer = document.getElementById('category-carousel-dots');
+        if (!grid || !dotsContainer) return;
+        
+        dotsContainer.innerHTML = '';
+        
+        // If grid is hidden (in editor or admin panels), hide dots
+        if (grid.style.display === 'none' || document.body.classList.contains('in-editor')) {
+            dotsContainer.style.display = 'none';
+            return;
+        }
+
+        const totalWidth = grid.scrollWidth;
+        const viewWidth = grid.clientWidth;
+        const scrollable = totalWidth - viewWidth;
+
+        if (scrollable <= 0) {
+            dotsContainer.style.display = 'none';
+            return;
+        }
+        
+        dotsContainer.style.display = 'flex';
+        
+        // Define step distance for pagination matching button step
+        const step = 300;
+        const pageCount = Math.ceil(totalWidth / step);
+        
+        let dotsHtml = '';
+        for (let i = 0; i < pageCount; i++) {
+            dotsHtml += `<div class="carousel-dot${i === 0 ? ' active' : ''}" data-index="${i}"></div>`;
+        }
+        dotsContainer.innerHTML = dotsHtml;
+
+        dotsContainer.querySelectorAll('.carousel-dot').forEach(dot => {
+            dot.addEventListener('click', () => {
+                const idx = parseInt(dot.dataset.index);
+                grid.scrollTo({
+                    left: idx * step,
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        const updateActiveDot = () => {
+            const scrollLeft = grid.scrollLeft;
+            const activeIdx = Math.round(scrollLeft / step);
+            dotsContainer.querySelectorAll('.carousel-dot').forEach((dot, idx) => {
+                if (idx === activeIdx) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+        };
+
+        grid.removeEventListener('scroll', updateActiveDot);
+        grid.addEventListener('scroll', updateActiveDot);
+    }
+
+    // Expose globally so resize event or page state changes can trigger it
+    window.setupCategoryCarouselDots = setupCategoryCarouselDots;
 
     // ─── RENDER: SIDEBAR CATEGORIES ─────────────────────
     function renderSidebarCategories(categories) {
@@ -1659,6 +1725,7 @@
     async function openWordPressEditor(mode, noteId = null) {
         window.closeAllCustomSelects(null, true);
         document.body.classList.add('in-editor');
+        if (window.setupCategoryCarouselDots) window.setupCategoryCarouselDots();
         document.getElementById('editor-page').style.display = 'flex';
         
         // Hide preview overlay by default
@@ -2602,6 +2669,9 @@
 
         // Search
         document.getElementById('search-input').addEventListener('input', debounce(fetchNotes, 300));
+        window.addEventListener('resize', debounce(() => {
+            if (window.setupCategoryCarouselDots) window.setupCategoryCarouselDots();
+        }, 150));
 
         // Filter clear
         document.getElementById('filter-clear-btn').addEventListener('click', clearFilter);

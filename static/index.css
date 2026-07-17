@@ -1859,6 +1859,11 @@ h1, h2, h3, h4, h5, h6 {
     padding: 20px 48px 16px; /* Extra padding on sides to leave room for absolute buttons */
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.category-carousel-wrapper .category-cards-grid::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for Chrome/Safari/Webkit */
 }
 
 .btn-carousel {
@@ -3031,6 +3036,37 @@ body.in-editor .main-content {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* ─── Carousel Dots ────────────────────────────────── */
+.carousel-dots {
+    display: none; /* Shown dynamically in JS when scrollable */
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.carousel-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.carousel-dot:hover {
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(1.2);
+}
+
+.carousel-dot.active {
+    background: var(--accent);
+    width: 16px;
+    border-radius: 3px;
 }
 
 /* ─── Print styles ────────────────────────────────── */
