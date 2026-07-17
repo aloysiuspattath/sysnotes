@@ -3173,7 +3173,11 @@
     // Expose helpers globally
     window.initCustomSelects = initCustomSelects;
     window.syncCustomSelects = syncCustomSelects;
-    window.closeAllCustomSelects = () => {
+    window.closeAllCustomSelects = (e) => {
+        // If scrolling inside the custom select options container itself, do NOT close the dropdown
+        if (e && e.target && e.target.closest('.custom-select-options')) {
+            return;
+        }
         document.querySelectorAll('.custom-select-wrapper.open').forEach(closeDropdown);
     };
 
