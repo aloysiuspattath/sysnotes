@@ -2894,3 +2894,73 @@ body.in-editor .main-content {
     padding: 6px 12px;
     font-size: 0.85rem;
 }
+
+/* ─── Print styles ────────────────────────────────── */
+@media print {
+    @page {
+        margin: 0;
+    }
+
+    /* Hide sidebar, topbar header, toggle buttons, and search elements */
+    .sidebar,
+    .top-bar,
+    .sidebar-overlay,
+    .hamburger-btn,
+    .view-toggle-group,
+    .top-search-wrapper,
+    .auth-section,
+    #toast-container,
+    .filter-indicator {
+        display: none !important;
+    }
+
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    body {
+        background: var(--bg-primary) !important;
+        color: var(--text-primary) !important;
+        margin: 0 !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .notes-container {
+        padding: 40px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        display: block !important;
+    }
+
+    .notes-container.view-stack {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    .notes-container.view-stack .note-item {
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-lg) !important;
+        box-shadow: none !important;
+        page-break-inside: avoid !important;
+    }
+
+    .notes-container.view-card {
+        display: block !important;
+        column-count: 1 !important;
+    }
+
+    .category-cards-grid {
+        display: none !important;
+    }
+}
