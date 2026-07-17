@@ -1443,6 +1443,24 @@
                     return;
                 }
                 
+                function formatAuditDetails(details, action) {
+                    if (!details) {
+                        if (action === 'APPROVED') return 'Note approved ✅';
+                        return '';
+                    }
+                    let formatted = details;
+                    // Format approved flag states to human readable text with emojis
+                    formatted = formatted.replace(/\(?approved=True\)?/gi, '(Approved ✅)');
+                    formatted = formatted.replace(/\(?approved=False\)?/gi, '(Pending Approval ⏳)');
+                    
+                    // Add friendly emojis for standard actions
+                    if (action === 'APPROVED' && !formatted.includes('✅')) formatted += ' ✅';
+                    if (action === 'CREATED' && !formatted.includes('✅') && !formatted.includes('⏳')) formatted += ' 📝';
+                    if (action === 'DELETED') formatted += ' ❌';
+                    if (action === 'RESTORED') formatted += ' ↩️';
+                    return formatted;
+                }
+
                 let logHtml = `<div class="steps-title" style="margin-bottom:15px; border-top:1px solid var(--border); padding-top:20px;">History</div>
                 <div style="background:var(--bg-secondary); border-radius:var(--radius-md); border:1px solid var(--border); padding:15px;">
                     <ul style="list-style:none; padding:0; margin:0; font-size:0.85rem; color:var(--text-secondary);">`;
@@ -1450,18 +1468,20 @@
                 logs.forEach(l => {
                     const dateStr = new Date(l.timestamp + 'Z').toLocaleString();
                     let actionColor = 'var(--text)';
-                    if(l.action === 'CREATED') actionColor = 'var(--success)';
-                    if(l.action === 'DELETED') actionColor = 'var(--danger)';
-                    if(l.action === 'APPROVED') actionColor = 'var(--accent)';
-                    if(l.action === 'UPDATED') actionColor = '#f59e0b';
+                    let actionLabel = l.action;
+                    if(l.action === 'CREATED') { actionColor = 'var(--success)'; actionLabel = 'CREATED 📝'; }
+                    if(l.action === 'DELETED') { actionColor = 'var(--danger)'; actionLabel = 'DELETED ❌'; }
+                    if(l.action === 'APPROVED') { actionColor = 'var(--accent)'; actionLabel = 'APPROVED ✅'; }
+                    if(l.action === 'RESTORED') { actionColor = 'var(--accent)'; actionLabel = 'RESTORED ↩️'; }
+                    if(l.action === 'UPDATED') { actionColor = '#f59e0b'; actionLabel = 'UPDATED ✏️'; }
                     
                     logHtml += `<li style="margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div>
-                            <strong style="color:${actionColor}">${esc(l.action)}</strong> by <strong>${esc(l.username || 'System')}</strong>
-                            <div style="margin-top:4px; font-size:0.8rem;">${esc(l.details || '')}</div>
-                        </div>
-                        <div style="font-size:0.75rem; white-space:nowrap; margin-left:15px;">${dateStr}</div>
-                    </li>`;
+                         <div>
+                             <strong style="color:${actionColor}">${esc(actionLabel)}</strong> by <strong>${esc(l.username || 'System')}</strong>
+                             <div style="margin-top:4px; font-size:0.8rem;">${esc(formatAuditDetails(l.details || '', l.action))}</div>
+                         </div>
+                         <div style="font-size:0.75rem; white-space:nowrap; margin-left:15px;">${dateStr}</div>
+                     </li>`;
                 });
                 
                 logHtml += `</ul></div>`;
