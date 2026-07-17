@@ -1834,14 +1834,60 @@ h1, h2, h3, h4, h5, h6 {
 /* ═══════════════════════════════════════════════════════
    CATEGORY CARDS GRID (Dashboard)
    ═══════════════════════════════════════════════════════ */
-.category-cards-grid {
+.category-carousel-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.category-carousel-wrapper .category-cards-grid {
+    flex-grow: 1;
     display: flex;
     overflow-x: auto;
     overflow-y: hidden;
     gap: 12px;
-    padding: 20px 24px 16px;
+    padding: 20px 48px 16px; /* Extra padding on sides to leave room for absolute buttons */
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
+}
+
+.btn-carousel {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: all var(--transition-fast);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-carousel:hover {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(var(--accent-rgb, 99, 102, 241), 0.4);
+}
+
+.btn-carousel-left {
+    left: 12px;
+}
+
+.btn-carousel-right {
+    right: 12px;
+}
+
+#category-cards-grid[style*="display: none"] ~ .btn-carousel {
+    display: none !important;
 }
 
 .category-cards-grid::-webkit-scrollbar {

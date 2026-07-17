@@ -79,7 +79,7 @@
     // Pagination state
     let currentPage = 1;
     let hasMoreNotes = true;
-    const notesPerPage = 50;
+    const notesPerPage = 15;
     let fetchingNotes = false;
 
     // Per-modal pending image uploads (before note id is known)
@@ -2571,6 +2571,19 @@
         setupVisibilityListeners();
         bindTeamsEventListeners();
         updateFilterIndicator();
+
+        // Category Carousel Scroll Buttons
+        const catGrid = document.getElementById('category-cards-grid');
+        const btnLeft = document.getElementById('category-scroll-left');
+        const btnRight = document.getElementById('category-scroll-right');
+        if (catGrid && btnLeft && btnRight) {
+            btnLeft.addEventListener('click', () => {
+                catGrid.scrollBy({ left: -300, behavior: 'smooth' });
+            });
+            btnRight.addEventListener('click', () => {
+                catGrid.scrollBy({ left: 300, behavior: 'smooth' });
+            });
+        }
 
         // Note type toggles (form)
         initNoteTypeToggle('add');
