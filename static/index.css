@@ -275,11 +275,12 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ─── Search ─────────────────────────────────────────── */
 .top-bar-center {
-    flex: 1;
+    flex: 1 1 auto;
     pointer-events: none;
     display: flex;
     justify-content: center;
     padding: 0 20px;
+    min-width: 150px;
 }
 
 .top-search-wrapper {
@@ -563,8 +564,7 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
     align-items: center;
     gap: 12px;
-    flex: 1;
-    min-width: 0;
+    flex: 0 0 auto;
 }
 
 .top-bar-right {
@@ -573,7 +573,8 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    justify-content: flex-end;
 }
 
 /* Hamburger */
@@ -3141,6 +3142,12 @@ body.in-editor .main-content {
 #sidebar-draft-notes .sidebar-section-label,
 #sidebar-favorites-notes .sidebar-section-label {
     margin-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+    .view-toggle-btn span {
+        display: none !important;
+    }
 }
 
 /* ─── Print styles ────────────────────────────────── */

@@ -24,7 +24,7 @@
     <script src="static/vendor/quill/quill.js"></script>
     <script src="static/vendor/marked.min.js"></script>
     <script src="static/vendor/purify.min.js"></script>
-    <link rel="stylesheet" href="static/index.css?v=56">
+    <link rel="stylesheet" href="static/index.css?v=57">
 </head>
 <body>
 
@@ -635,31 +635,60 @@
                                 <div class="admin-card-header">
                                     <h3 class="admin-card-title">Server Metrics</h3>
                                 </div>
-                                <div class="admin-card-body">
-                                    <div class="metric-row" style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
-                                        <span>CPU Usage:</span>
-                                        <span id="metric-cpu" class="metric-value" style="font-weight: 600; color: var(--accent);">--</span>
+                                <div class="admin-card-body" style="display: flex; flex-direction: column; gap: 15px;">
+                                    <!-- Gauges Row -->
+                                    <div class="metrics-gauges-container" style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 5px; gap: 10px;">
+                                        <!-- CPU Gauge -->
+                                        <div class="gauge-item" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                                            <div class="gauge-wrapper" style="position: relative; width: 68px; height: 68px;">
+                                                <svg width="68" height="68" style="transform: rotate(-90deg); display: block;">
+                                                    <circle cx="34" cy="34" r="29" stroke="rgba(255,255,255,0.05)" stroke-width="5" fill="transparent" />
+                                                    <circle id="gauge-cpu" cx="34" cy="34" r="29" stroke="var(--accent)" stroke-dasharray="182.2" stroke-dashoffset="182.2" stroke-width="5" fill="transparent" stroke-linecap="round" style="transition: stroke-dashoffset 0.4s ease;" />
+                                                </svg>
+                                                <div id="gauge-cpu-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600;">0%</div>
+                                            </div>
+                                            <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.5px;">CPU</span>
+                                        </div>
+
+                                        <!-- RAM Gauge -->
+                                        <div class="gauge-item" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                                            <div class="gauge-wrapper" style="position: relative; width: 68px; height: 68px;">
+                                                <svg width="68" height="68" style="transform: rotate(-90deg); display: block;">
+                                                    <circle cx="34" cy="34" r="29" stroke="rgba(255,255,255,0.05)" stroke-width="5" fill="transparent" />
+                                                    <circle id="gauge-mem" cx="34" cy="34" r="29" stroke="var(--accent)" stroke-dasharray="182.2" stroke-dashoffset="182.2" stroke-width="5" fill="transparent" stroke-linecap="round" style="transition: stroke-dashoffset 0.4s ease;" />
+                                                </svg>
+                                                <div id="gauge-mem-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600;">0%</div>
+                                            </div>
+                                            <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.5px;">RAM</span>
+                                        </div>
+
+                                        <!-- Disk Gauge -->
+                                        <div class="gauge-item" style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                                            <div class="gauge-wrapper" style="position: relative; width: 68px; height: 68px;">
+                                                <svg width="68" height="68" style="transform: rotate(-90deg); display: block;">
+                                                    <circle cx="34" cy="34" r="29" stroke="rgba(255,255,255,0.05)" stroke-width="5" fill="transparent" />
+                                                    <circle id="gauge-disk" cx="34" cy="34" r="29" stroke="var(--accent)" stroke-dasharray="182.2" stroke-dashoffset="182.2" stroke-width="5" fill="transparent" stroke-linecap="round" style="transition: stroke-dashoffset 0.4s ease;" />
+                                                </svg>
+                                                <div id="gauge-disk-text" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600;">0%</div>
+                                            </div>
+                                            <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.5px;">DISK</span>
+                                        </div>
                                     </div>
-                                    <div class="progress-bar-container" style="background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px;">
-                                        <div id="bar-cpu" class="progress-bar" style="background: var(--accent); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
-                                    </div>
-                                    <div class="metric-row" style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
-                                        <span>Memory:</span>
-                                        <span id="metric-mem" class="metric-value" style="font-weight: 600; color: var(--accent);">--</span>
-                                    </div>
-                                    <div class="progress-bar-container" style="background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px;">
-                                        <div id="bar-mem" class="progress-bar" style="background: var(--accent); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
-                                    </div>
-                                    <div class="metric-row" style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
-                                        <span>Disk Usage:</span>
-                                        <span id="metric-disk" class="metric-value" style="font-weight: 600; color: var(--accent);">--</span>
-                                    </div>
-                                    <div class="progress-bar-container" style="background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px;">
-                                        <div id="bar-disk" class="progress-bar" style="background: var(--accent); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
-                                    </div>
-                                    <div class="metric-row" style="margin-top: 12px; font-size: 0.8rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
-                                        <span>Server Uptime:</span>
-                                        <span id="metric-uptime">--</span>
+
+                                    <!-- Details List -->
+                                    <div class="metrics-details-list" style="display: flex; flex-direction: column; gap: 10px;">
+                                        <div class="db-metric-item" style="display: flex; justify-content: space-between; font-size: 0.82rem; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                                            <div style="color: var(--text-secondary);">RAM Capacity:</div>
+                                            <div id="text-metric-mem" style="font-weight: 500;">--</div>
+                                        </div>
+                                        <div class="db-metric-item" style="display: flex; justify-content: space-between; font-size: 0.82rem; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+                                            <div style="color: var(--text-secondary);">Disk Storage:</div>
+                                            <div id="text-metric-disk" style="font-weight: 500;">--</div>
+                                        </div>
+                                        <div class="db-metric-item" style="display: flex; justify-content: space-between; font-size: 0.82rem; padding-bottom: 2px;">
+                                            <div style="color: var(--text-secondary);">Server Uptime:</div>
+                                            <div id="metric-uptime" style="font-weight: 500;">--</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

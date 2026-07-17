@@ -2610,16 +2610,19 @@
             
             // Server Metrics
             const s = data.server || {};
-            document.getElementById('metric-cpu').textContent = (s.cpu_percent || 0.0) + '%';
-            document.getElementById('bar-cpu').style.width = (s.cpu_percent || 0.0) + '%';
+            const cpuVal = s.cpu_percent || 0.0;
+            document.getElementById('gauge-cpu-text').textContent = cpuVal.toFixed(1) + '%';
+            document.getElementById('gauge-cpu').style.strokeDashoffset = 182.2 - (cpuVal / 100) * 182.2;
             
-            const memText = `${s.memory_used_mb || 0} MB / ${s.memory_total_mb || 0} MB (${s.memory_percent || 0}%)`;
-            document.getElementById('metric-mem').textContent = memText;
-            document.getElementById('bar-mem').style.width = (s.memory_percent || 0) + '%';
+            const memVal = s.memory_percent || 0.0;
+            document.getElementById('gauge-mem-text').textContent = memVal.toFixed(0) + '%';
+            document.getElementById('gauge-mem').style.strokeDashoffset = 182.2 - (memVal / 100) * 182.2;
+            document.getElementById('text-metric-mem').textContent = `${s.memory_used_mb || 0} MB / ${s.memory_total_mb || 0} MB`;
             
-            const diskText = `${s.disk_used_gb || 0} GB / ${s.disk_total_gb || 0} GB (${s.disk_percent || 0}%)`;
-            document.getElementById('metric-disk').textContent = diskText;
-            document.getElementById('bar-disk').style.width = (s.disk_percent || 0) + '%';
+            const diskVal = s.disk_percent || 0.0;
+            document.getElementById('gauge-disk-text').textContent = diskVal.toFixed(0) + '%';
+            document.getElementById('gauge-disk').style.strokeDashoffset = 182.2 - (diskVal / 100) * 182.2;
+            document.getElementById('text-metric-disk').textContent = `${s.disk_used_gb || 0.0} GB / ${s.disk_total_gb || 0.0} GB`;
             
             // Format uptime
             document.getElementById('metric-uptime').textContent = formatDuration(s.uptime_seconds || 0);
