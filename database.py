@@ -36,6 +36,7 @@ def init_db():
             auth_type TEXT DEFAULT 'ad',
             failed_attempts INTEGER DEFAULT 0,
             locked_until DATETIME,
+            last_active TEXT,
             UNIQUE(username, auth_type)
         )
     ''')
@@ -47,6 +48,8 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0")
     if 'locked_until' not in user_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN locked_until DATETIME")
+    if 'last_active' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN last_active TEXT")
 
     # Teams table
     cursor.execute('''
@@ -323,6 +326,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_note_id ON audit_logs(note_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active)")
 
     # Ensure default settings exist
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('reverse_proxy_url', '')")

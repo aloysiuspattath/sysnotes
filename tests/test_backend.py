@@ -543,5 +543,56 @@ class BackendTestCase(unittest.TestCase):
         self.assertEqual(frequent[0]['id'], note2_id)
         self.assertEqual(frequent[1]['id'], note1_id)
 
+    def test_in_memory_cache_operations(self):
+        from cache_helper import InMemoryCache
+        cache = InMemoryCache(default_ttl=1, max_size=2)
+        
+        # Test basic set/get
+        cache.set('k1', 'v1')
+        self.assertEqual(cache.get('k1'), 'v1')
+        
+        # Test max size constraint
+        cache.set('k2', 'v2')
+        cache.set('k3', 'v3') # Exceeds size 2, should displace oldest or expired
+        self.assertEqual(cache.size(), 2)
+        
+        # Test cache clear
+        cache.clear()
+        self.assertEqual(cache.size(), 0)
+        self.assertIsNone(cache.get('k1'))
+
+    def test_admin_system_status_access(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        headers_author1 = {'Authorization': 'Bearer ' + self.author1_token}
+        
+        # Admin request should pass
+        res = self.client.get('/api/admin/system-status', headers=headers_admin)
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn('server', data)
+        self.assertIn('database', data)
+        self.assertIn('cache', data)
+        self.assertIn('active_sessions', data)
+        
+        # Author request should fail (403 Admin required)
+        res_author = self.client.get('/api/admin/system-status', headers=headers_author1)
+        self.assertEqual(res_author.status_code, 403)
+
+    def test_user_activity_updates(self):
+        # Trigger decorator activity logger
+        headers_author1 = {'Authorization': 'Bearer ' + self.author1_token}
+        
+        # Clear activity cache to force update
+        from cache_helper import activity_cache
+        activity_cache.clear()
+        
+        # Call a route
+        self.client.get('/api/settings', headers=headers_author1)
+        
+        # Verify user activity recorded in database
+        self.cursor.execute("SELECT last_active FROM users WHERE id = ?", (self.author1_id,))
+        row = self.cursor.fetchone()
+        self.assertIsNotNone(row['last_active'])
+
 if __name__ == '__main__':
     unittest.main()

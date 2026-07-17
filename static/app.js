@@ -319,6 +319,7 @@
     function closeAdminPage() {
         window.closeAllCustomSelects(null, true);
         isAdminPageOpen = false;
+        if (window.stopSystemStatusPolling) window.stopSystemStatusPolling();
         document.getElementById('admin-page').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = '';
         document.getElementById('notes-container').style.display = '';
@@ -332,6 +333,10 @@
             c.classList.toggle('active', c.id === tabId);
             c.style.display = (c.id === tabId) ? 'block' : 'none';
         });
+
+        if (tabId !== 'ap-settings-tab' && window.stopSystemStatusPolling) {
+            window.stopSystemStatusPolling();
+        }
 
         if (tabId === 'ap-pending-tab') loadAdminPending();
         if (tabId === 'ap-categories-tab') loadAdminCategories();
@@ -812,10 +817,13 @@
         if (fetchingNotes) return;
         fetchingNotes = true;
 
+        const q = document.getElementById('search-input').value.trim();
+
         if (resetPage) {
             currentPage = 1;
             hasMoreNotes = true;
             document.getElementById('notes-container').innerHTML = '';
+            renderSearchSuggestions(q);
         }
 
         if (!hasMoreNotes) {
@@ -825,7 +833,6 @@
 
         let url = `api/notes?page=${currentPage}&limit=${notesPerPage}&`;
         const params = [];
-        const q = document.getElementById('search-input').value.trim();
         if (q) params.push('q=' + encodeURIComponent(q));
         if (activeCategory) params.push('category=' + activeCategory);
         if (activeTag) params.push('tag=' + encodeURIComponent(activeTag));
@@ -855,6 +862,74 @@
         } finally {
             fetchingNotes = false;
         }
+    }
+
+    function renderSearchSuggestions(q) {
+        const container = document.getElementById('search-suggestions');
+        if (!container) return;
+        
+        if (!q || q.length < 2) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+
+        const query = q.toLowerCase();
+        
+        const matchedCategories = (allCategories || []).filter(cat => 
+            cat.enabled && cat.name.toLowerCase().includes(query)
+        );
+        const matchedTags = (allTags || []).filter(tag => 
+            tag.name.toLowerCase().includes(query)
+        );
+
+        if (matchedCategories.length === 0 && matchedTags.length === 0) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+
+        let html = '<span style="font-weight: 500; color: var(--text-secondary); margin-right: 8px;">Quick Filters:</span>';
+        
+        matchedCategories.forEach(cat => {
+            html += `<span class="suggestion-chip category-chip" data-cat-id="${cat.id}">📁 ${escapeHTML(cat.name)}</span>`;
+        });
+        matchedTags.forEach(tag => {
+            html += `<span class="suggestion-chip tag-chip" data-tag-name="${tag.name}">🏷️ ${escapeHTML(tag.name)}</span>`;
+        });
+
+        container.innerHTML = html;
+        container.style.display = 'flex';
+
+        container.querySelectorAll('.suggestion-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.getElementById('search-input').value = '';
+                container.innerHTML = '';
+                container.style.display = 'none';
+                
+                if (chip.dataset.catId) {
+                    const catId = chip.dataset.catId;
+                    activeCategory = catId;
+                    const cat = allCategories.find(c => c.id == catId);
+                    activeCategoryName = cat ? cat.name : '';
+                    activeTag = null;
+                } else if (chip.dataset.tagName) {
+                    activeTag = chip.dataset.tagName;
+                    activeCategory = null;
+                    activeCategoryName = null;
+                }
+                
+                activePending = false;
+                activeDrafts = false;
+                activeFavorites = false;
+                updateFilterIndicator();
+                fetchNotes();
+                renderSidebarCategories(allCategories);
+                renderCategoryCards(allCategories);
+                renderTags(allTags);
+                updateSidebarFavoritesUI();
+            });
+        });
     }
 
     async function fetchCategories() {
@@ -1134,6 +1209,11 @@
             window.history.pushState(null, null, '/');
         }
         if (isAdminPageOpen) closeAdminPage();
+        const suggestions = document.getElementById('search-suggestions');
+        if (suggestions) {
+            suggestions.innerHTML = '';
+            suggestions.style.display = 'none';
+        }
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
         updateSidebarFavoritesUI();
@@ -2499,6 +2579,119 @@
         showToast('User created!'); loadAdminUsers();
     }
 
+    let systemStatusTimer = null;
+
+    async function fetchSystemStatus() {
+        if (currentRole !== 'admin') return;
+        try {
+            const res = await apiFetch('api/admin/system-status', { headers: authHeaders() });
+            if (!res || !res.ok) return;
+            const data = await res.json();
+            
+            // Server Metrics
+            const s = data.server || {};
+            document.getElementById('metric-cpu').textContent = (s.cpu_percent || 0.0) + '%';
+            document.getElementById('bar-cpu').style.width = (s.cpu_percent || 0.0) + '%';
+            
+            const memText = `${s.memory_used_mb || 0} MB / ${s.memory_total_mb || 0} MB (${s.memory_percent || 0}%)`;
+            document.getElementById('metric-mem').textContent = memText;
+            document.getElementById('bar-mem').style.width = (s.memory_percent || 0) + '%';
+            
+            const diskText = `${s.disk_used_gb || 0} GB / ${s.disk_total_gb || 0} GB (${s.disk_percent || 0}%)`;
+            document.getElementById('metric-disk').textContent = diskText;
+            document.getElementById('bar-disk').style.width = (s.disk_percent || 0) + '%';
+            
+            // Format uptime
+            document.getElementById('metric-uptime').textContent = formatDuration(s.uptime_seconds || 0);
+            
+            // Database spec
+            const db = data.database || {};
+            const sizeMB = (db.size_bytes / (1024 * 1024)).toFixed(2);
+            document.getElementById('db-metric-size').textContent = `${sizeMB} MB`;
+            document.getElementById('db-metric-version').textContent = db.sqlite_version || '--';
+            document.getElementById('db-metric-journal').textContent = (db.journal_mode || '--').toUpperCase();
+            
+            const integrityEl = document.getElementById('db-metric-integrity');
+            integrityEl.textContent = (db.integrity || '--').toUpperCase();
+            if (db.integrity === 'ok') {
+                integrityEl.style.color = '#10b981';
+            } else {
+                integrityEl.style.color = '#ef4444';
+            }
+            
+            // Cache specs
+            const cache = data.cache || {};
+            document.getElementById('cache-metric-keys').textContent = cache.size || '0';
+            document.getElementById('cache-metric-hits').textContent = cache.hits || '0';
+            document.getElementById('cache-metric-misses').textContent = cache.misses || '0';
+            
+            // Live Sessions list
+            const sessions = data.active_sessions || [];
+            const sessionsBody = document.getElementById('live-sessions-table-body');
+            if (sessions.length === 0) {
+                sessionsBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-tertiary); padding: 15px;">No active sessions found.</td></tr>`;
+            } else {
+                let html = '';
+                sessions.forEach(sess => {
+                    const localTime = formatUTCTimeString(sess.last_active);
+                    html += `<tr>
+                        <td style="font-weight: 500;">${escapeHTML(sess.username)}</td>
+                        <td><span class="badge badge-info">${escapeHTML(sess.role)}</span></td>
+                        <td>${localTime}</td>
+                    </tr>`;
+                });
+                sessionsBody.innerHTML = html;
+            }
+        } catch (e) {
+            console.error('Failed to fetch system status:', e);
+        }
+    }
+
+    function startSystemStatusPolling() {
+        if (systemStatusTimer) clearInterval(systemStatusTimer);
+        if (currentRole !== 'admin' || !isAdminPageOpen) return;
+        
+        fetchSystemStatus(); // Run once immediately
+        systemStatusTimer = setInterval(() => {
+            const activeTab = document.querySelector('.admin-page-tab.active');
+            if (isAdminPageOpen && activeTab && activeTab.dataset.tab === 'ap-settings-tab') {
+                fetchSystemStatus();
+            } else {
+                stopSystemStatusPolling();
+            }
+        }, 10000);
+    }
+
+    function stopSystemStatusPolling() {
+        if (systemStatusTimer) {
+            clearInterval(systemStatusTimer);
+            systemStatusTimer = null;
+        }
+    }
+    window.stopSystemStatusPolling = stopSystemStatusPolling;
+
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ${minutes % 60}m`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ${hours % 24}h`;
+    }
+
+    function formatUTCTimeString(utcStr) {
+        if (!utcStr) return '--';
+        try {
+            const dateStr = utcStr.replace(' ', 'T') + 'Z';
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return utcStr;
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + date.toLocaleDateString();
+        } catch {
+            return utcStr;
+        }
+    }
+
     async function loadAdminSettings() {
         const res = await apiFetch('api/settings', { headers: authHeaders() });
         if (!res) return;
@@ -2514,6 +2707,13 @@
 
         const backupLocation = document.getElementById('ap-backup-location');
         if (backupLocation && data.backup_location != null) backupLocation.value = data.backup_location;
+
+        if (currentRole === 'admin') {
+            document.getElementById('admin-status-dashboard').style.display = 'block';
+            startSystemStatusPolling();
+        } else {
+            document.getElementById('admin-status-dashboard').style.display = 'none';
+        }
     }
 
     async function handleSaveSettings(e) {
@@ -2782,6 +2982,25 @@
                 location.reload(true);
             }
         });
+
+        // Flush Server Cache Button
+        const flushCacheBtn = document.getElementById('ap-flush-cache-btn');
+        if (flushCacheBtn) {
+            flushCacheBtn.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to flush the backend system cache?')) {
+                    const res = await apiFetch('api/admin/flush-cache', {
+                        method: 'POST',
+                        headers: authHeaders()
+                    });
+                    if (res && res.ok) {
+                        showToast('Server cache flushed!');
+                        fetchSystemStatus();
+                    } else {
+                        showToast('Failed to flush cache', true);
+                    }
+                }
+            });
+        }
 
         // Auto-Backup Settings
         document.getElementById('ap-backup-settings-form').addEventListener('submit', async (e) => {

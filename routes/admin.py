@@ -1,4 +1,7 @@
 import os
+import sys
+import time
+import shutil
 import secrets
 import sqlite3
 from datetime import datetime
@@ -8,8 +11,109 @@ from db_helper import get_db, allowed_file, DATABASE_PATH
 from auth import admin_required, login_required
 from routes.auth import validate_password
 from database import get_user_teams, get_all_teams, create_team, delete_team
+from cache_helper import settings_cache, categories_cache, tags_cache, stats_cache, activity_cache
 
 admin_bp = Blueprint('admin', __name__)
+
+server_start_time = time.time()
+
+def get_system_metrics():
+    metrics = {
+        'uptime_seconds': int(time.time() - server_start_time),
+        'cpu_percent': 0.0,
+        'memory_total_mb': 0,
+        'memory_used_mb': 0,
+        'memory_free_mb': 0,
+        'memory_percent': 0.0,
+        'disk_total_gb': 0.0,
+        'disk_used_gb': 0.0,
+        'disk_free_gb': 0.0,
+        'disk_percent': 0.0,
+    }
+    
+    # Disk space metrics (cross-platform)
+    try:
+        total, used, free = shutil.disk_usage('.')
+        metrics['disk_total_gb'] = round(total / (1024**3), 1)
+        metrics['disk_used_gb'] = round(used / (1024**3), 1)
+        metrics['disk_free_gb'] = round(free / (1024**3), 1)
+        metrics['disk_percent'] = round((used / total) * 100, 1) if total > 0 else 0.0
+    except:
+        pass
+
+    # Memory and CPU metrics
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ('dwLength', ctypes.c_ulong),
+                    ('dwMemoryLoad', ctypes.c_ulong),
+                    ('ullTotalPhys', ctypes.c_ulonglong),
+                    ('ullAvailPhys', ctypes.c_ulonglong),
+                    ('ullTotalPageFile', ctypes.c_ulonglong),
+                    ('ullAvailPageFile', ctypes.c_ulonglong),
+                    ('ullTotalVirtual', ctypes.c_ulonglong),
+                    ('ullAvailVirtual', ctypes.c_ulonglong),
+                    ('ullAvailExtendedVirtual', ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(stat)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            metrics['memory_total_mb'] = int(stat.ullTotalPhys / (1024**2))
+            metrics['memory_free_mb'] = int(stat.ullAvailPhys / (1024**2))
+            metrics['memory_used_mb'] = metrics['memory_total_mb'] - metrics['memory_free_mb']
+            metrics['memory_percent'] = float(stat.dwMemoryLoad)
+            
+            # CPU Load query
+            class FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime", ctypes.c_uint), ("dwHighDateTime", ctypes.c_uint)]
+            idle = FILETIME()
+            kernel = FILETIME()
+            user = FILETIME()
+            if ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
+                def to_int(ft): return (ft.dwHighDateTime << 32) + ft.dwLowDateTime
+                idle_start, kernel_start, user_start = to_int(idle), to_int(kernel), to_int(user)
+                time.sleep(0.05)
+                ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user))
+                idle_end, kernel_end, user_end = to_int(idle), to_int(kernel), to_int(user)
+                
+                idle_delta = idle_end - idle_start
+                kernel_delta = kernel_end - kernel_start
+                user_delta = user_end - user_start
+                system_delta = kernel_delta + user_delta
+                
+                if system_delta > 0:
+                    metrics['cpu_percent'] = round(((system_delta - idle_delta) / system_delta) * 100, 1)
+        except:
+            pass
+    else:
+        # Linux load metrics
+        try:
+            if os.path.exists('/proc/meminfo'):
+                mem = {}
+                with open('/proc/meminfo', 'r') as f:
+                    for line in f:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            mem[parts[0].rstrip(':')] = int(parts[1])
+                total = mem.get('MemTotal', 0) * 1024
+                free = mem.get('MemFree', 0) * 1024
+                cached = mem.get('Cached', 0) * 1024
+                buffers = mem.get('Buffers', 0) * 1024
+                available = free + cached + buffers
+                used = total - available
+                metrics['memory_total_mb'] = int(total / (1024**2))
+                metrics['memory_used_mb'] = int(used / (1024**2))
+                metrics['memory_free_mb'] = int(available / (1024**2))
+                metrics['memory_percent'] = round((used / total) * 100, 1) if total > 0 else 0.0
+            
+            if hasattr(os, 'getloadavg'):
+                metrics['cpu_percent'] = round(os.getloadavg()[0] * 10, 1)
+        except:
+            pass
+            
+    return metrics
 
 def admin_or_moderator_required(f):
     from functools import wraps
@@ -221,11 +325,15 @@ def remove_team(team_id):
 @admin_bp.route('/api/settings', methods=['GET'])
 @login_required
 def get_settings():
+    cached_val = settings_cache.get('settings')
+    if cached_val:
+        return jsonify(cached_val)
     conn = get_db()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT key, value FROM settings")
         settings = {row['key']: row['value'] for row in cursor.fetchall()}
+        settings_cache.set('settings', settings)
         return jsonify(settings)
     finally:
         conn.close()
@@ -242,6 +350,7 @@ def update_settings():
             cursor.execute("UPDATE settings SET value = ? WHERE key = ?", (value, key))
 
         conn.commit()
+        settings_cache.clear()
         return jsonify({'message': 'Settings updated'})
     finally:
         conn.close()
@@ -250,6 +359,9 @@ def update_settings():
 
 @admin_bp.route('/api/categories', methods=['GET'])
 def get_categories():
+    cached_val = categories_cache.get('categories')
+    if cached_val:
+        return jsonify(cached_val)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -261,6 +373,7 @@ def get_categories():
             ORDER BY c.name
         """)
         categories = [dict(row) for row in cursor.fetchall()]
+        categories_cache.set('categories', categories)
         return jsonify(categories)
     finally:
         conn.close()
@@ -281,6 +394,7 @@ def create_category():
         try:
             cursor.execute("INSERT INTO categories (name) VALUES (?)", (name,))
             conn.commit()
+            categories_cache.clear()
             return jsonify({'message': 'Category created', 'id': cursor.lastrowid}), 201
         except sqlite3.IntegrityError:
             return jsonify({'message': 'Category already exists'}), 400
@@ -301,6 +415,7 @@ def delete_category(cat_id):
         if cursor.rowcount == 0:
             return jsonify({'message': 'Category not found'}), 404
 
+        categories_cache.clear()
         return jsonify({'message': 'Category deleted successfully'})
     finally:
         conn.close()
@@ -320,6 +435,7 @@ def update_category(cat_id):
         new_state = 0 if row['enabled'] else 1
         cursor.execute("UPDATE categories SET enabled = ? WHERE id = ?", (new_state, cat_id))
         conn.commit()
+        categories_cache.clear()
         return jsonify({'message': 'Category toggled', 'enabled': bool(new_state)})
     finally:
         conn.close()
@@ -328,6 +444,9 @@ def update_category(cat_id):
 
 @admin_bp.route('/api/tags', methods=['GET'])
 def get_tags():
+    cached_val = tags_cache.get('tags')
+    if cached_val:
+        return jsonify(cached_val)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -339,6 +458,7 @@ def get_tags():
             ORDER BY t.name
         """)
         tags = [dict(row) for row in cursor.fetchall()]
+        tags_cache.set('tags', tags)
         return jsonify(tags)
     finally:
         conn.close()
@@ -347,6 +467,9 @@ def get_tags():
 
 @admin_bp.route('/api/stats', methods=['GET'])
 def get_stats():
+    cached_val = stats_cache.get('stats')
+    if cached_val:
+        return jsonify(cached_val)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -356,11 +479,13 @@ def get_stats():
         total_categories = cursor.fetchone()['count']
         cursor.execute("SELECT COUNT(*) as count FROM tags")
         total_tags = cursor.fetchone()['count']
-        return jsonify({
+        data = {
             'total_notes': total_notes,
             'total_categories': total_categories,
             'total_tags': total_tags
-        })
+        }
+        stats_cache.set('stats', data)
+        return jsonify(data)
     finally:
         conn.close()
 
@@ -451,3 +576,89 @@ def get_note_audit(note_id):
         return jsonify(logs)
     finally:
         conn.close()
+
+# ================= SYSTEM HEALTH & CACHE METRICS ================= #
+
+@admin_bp.route('/api/admin/system-status', methods=['GET'])
+@admin_required
+def get_system_status():
+    conn = get_db()
+    try:
+        # Server metrics
+        sys_metrics = get_system_metrics()
+        
+        # Database size & specs
+        db_size_bytes = os.path.getsize(DATABASE_PATH) if os.path.exists(DATABASE_PATH) else 0
+        cursor = conn.cursor()
+        
+        cursor.execute("PRAGMA integrity_check")
+        integrity_row = cursor.fetchone()
+        db_integrity = integrity_row[0] if integrity_row else "unknown"
+        
+        cursor.execute("PRAGMA journal_mode")
+        journal_row = cursor.fetchone()
+        db_journal = journal_row[0] if journal_row else "unknown"
+        
+        cursor.execute("SELECT sqlite_version()")
+        sqlite_version_str = cursor.fetchone()[0]
+        
+        # Cache metrics
+        total_cache_keys = (
+            settings_cache.size() + 
+            categories_cache.size() + 
+            tags_cache.size() + 
+            stats_cache.size() + 
+            activity_cache.size()
+        )
+        total_cache_hits = (
+            settings_cache.hits + 
+            categories_cache.hits + 
+            tags_cache.hits + 
+            stats_cache.hits + 
+            activity_cache.hits
+        )
+        total_cache_misses = (
+            settings_cache.misses + 
+            categories_cache.misses + 
+            tags_cache.misses + 
+            stats_cache.misses + 
+            activity_cache.misses
+        )
+        
+        # Active sessions in last 5 minutes (UTC)
+        cursor.execute("""
+            SELECT username, role, last_active 
+            FROM users 
+            WHERE last_active >= datetime('now', '-5 minutes') 
+            ORDER BY last_active DESC
+        """)
+        active_sessions = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'server': sys_metrics,
+            'database': {
+                'size_bytes': db_size_bytes,
+                'integrity': db_integrity,
+                'journal_mode': db_journal,
+                'sqlite_version': sqlite_version_str
+            },
+            'cache': {
+                'size': total_cache_keys,
+                'hits': total_cache_hits,
+                'misses': total_cache_misses
+            },
+            'active_sessions': active_sessions
+        })
+    finally:
+        conn.close()
+
+@admin_bp.route('/api/admin/flush-cache', methods=['POST'])
+@admin_required
+def flush_cache():
+    settings_cache.clear()
+    categories_cache.clear()
+    tags_cache.clear()
+    stats_cache.clear()
+    activity_cache.clear()
+    return jsonify({'message': 'System cache cleared successfully'})
+
