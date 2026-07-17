@@ -830,6 +830,9 @@ h1, h2, h3, h4, h5, h6 {
     break-inside: avoid;
     margin-bottom: 20px;
     width: 100%;
+    will-change: transform, opacity, box-shadow;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
 }
 
 @media (max-width: 900px) {
@@ -879,6 +882,9 @@ h1, h2, h3, h4, h5, h6 {
     transition: transform var(--transition-base), box-shadow var(--transition-base);
     /* Removed animation for list view to improve performance on large lists */
     box-shadow: var(--card-shadow);
+    will-change: transform, opacity, box-shadow;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
 }
 
 .notes-container.view-list .note-item:hover {
@@ -919,6 +925,9 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    will-change: transform, opacity, box-shadow;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
 }
 
 .notes-container.view-stack .note-item:hover {
@@ -1921,6 +1930,9 @@ h1, h2, h3, h4, h5, h6 {
     gap: 6px;
     flex: 0 0 140px;
     width: 140px;
+    will-change: transform, opacity, box-shadow;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
 }
 
 .category-card::before {
