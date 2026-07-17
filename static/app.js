@@ -231,6 +231,7 @@
             if (favNav) favNav.style.display = 'block';
             updatePendingCount();
             updateDraftCount();
+            updateFavoritesCount();
             fetchQuickAccessNotes();
         } else {
             loggedOut.style.display = 'flex';
@@ -338,7 +339,7 @@
             window.stopSystemStatusPolling();
         }
 
-        if (tabId === 'ap-pending-tab') loadAdminPending();
+        if (tabId === 'ap-pending-tab') loadPendingNotes();
         if (tabId === 'ap-categories-tab') loadAdminCategories();
         if (tabId === 'ap-users-tab') loadAdminUsers();
         if (tabId === 'ap-teams-tab') fetchTeams();
@@ -1008,7 +1009,7 @@
         if (modalList) modalList.innerHTML = html;
     }
 
-    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); fetchTeams(); updatePendingCount(); updateDraftCount(); fetchQuickAccessNotes(); }
+    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); fetchTeams(); updatePendingCount(); updateDraftCount(); updateFavoritesCount(); fetchQuickAccessNotes(); }
 
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
@@ -1289,6 +1290,23 @@
             }
         } catch (err) {
             console.error('Error fetching draft count', err);
+        }
+    async function updateFavoritesCount() {
+        if (!currentToken) {
+            document.getElementById('sidebar-favorites-notes').style.display = 'none';
+            return;
+        }
+        try {
+            const res = await apiFetch('api/notes?favorite=true', { headers: authHeaders() });
+            if (res && res.ok) {
+                const notes = await res.json();
+                const count = notes.length;
+                const badge = document.getElementById('sidebar-favorites-count');
+                if (badge) badge.textContent = count;
+                document.getElementById('sidebar-favorites-notes').style.display = 'block';
+            }
+        } catch (err) {
+            console.error('Error fetching favorites count', err);
         }
     }
 
@@ -2977,11 +2995,14 @@
         document.getElementById('admin-back-btn').addEventListener('click', closeAdminPage);
 
         // Clear Cache Button
-        document.getElementById('ap-clear-cache-btn').addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear frontend cache and reload?')) {
-                location.reload(true);
-            }
-        });
+        const clearCacheBtn = document.getElementById('ap-clear-cache-btn');
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear frontend cache and reload?')) {
+                    location.reload(true);
+                }
+            });
+        }
 
         // Flush Server Cache Button
         const flushCacheBtn = document.getElementById('ap-flush-cache-btn');
@@ -3536,7 +3557,7 @@
     window.syncCustomSelects = syncCustomSelects;
     window.closeAllCustomSelects = (e, immediate = false) => {
         // If scrolling inside the custom select options container itself, do NOT close the dropdown
-        if (e && e.target && e.target.closest('.custom-select-options')) {
+        if (e && e.target && typeof e.target.closest === 'function' && e.target.closest('.custom-select-options')) {
             return;
         }
         document.querySelectorAll('.custom-select-wrapper.open').forEach(w => closeDropdown(w, immediate));
@@ -3571,6 +3592,7 @@
                 }
                 
                 showToast(isFav ? 'Added to favorites ⭐' : 'Removed from favorites', 'success');
+                updateFavoritesCount();
                 
                 // If favorites filter is active, re-render
                 if (activeFavorites) {

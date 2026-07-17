@@ -3131,6 +3131,18 @@ body.in-editor .main-content {
     animation: live-pulse 2s infinite;
 }
 
+#sidebar-pending-notes,
+#sidebar-draft-notes,
+#sidebar-favorites-notes {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+#sidebar-pending-notes .sidebar-section-label,
+#sidebar-draft-notes .sidebar-section-label,
+#sidebar-favorites-notes .sidebar-section-label {
+    margin-bottom: 0;
+}
+
 /* ─── Print styles ────────────────────────────────── */
 @media print {
     @page {
