@@ -1291,6 +1291,8 @@
         } catch (err) {
             console.error('Error fetching draft count', err);
         }
+    }
+
     async function updateFavoritesCount() {
         if (!currentToken) {
             document.getElementById('sidebar-favorites-notes').style.display = 'none';
