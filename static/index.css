@@ -1811,8 +1811,8 @@ h1, h2, h3, h4, h5, h6 {
     .top-search-wrapper {
         max-width: 130px;
     }
-    #add-note-btn span {
-        display: none;
+    .auth-section .btn span.btn-text {
+        display: none !important;
     }
 }
 

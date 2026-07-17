@@ -160,6 +160,9 @@ def force_https():
 
 @app.errorhandler(Exception)
 def handle_exception(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
     import traceback
     with open('error_log.txt', 'a') as f:
         f.write(traceback.format_exc() + '\n')
@@ -194,8 +197,8 @@ def serve_team_index(team_name):
     finally:
         conn.close()
         
-    from flask import abort
-    abort(404)
+    from flask import redirect
+    return redirect('/')
 
 # Serve uploaded images
 @app.route('/uploads/<path:filename>')
