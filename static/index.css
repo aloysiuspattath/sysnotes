@@ -1835,10 +1835,27 @@ h1, h2, h3, h4, h5, h6 {
    CATEGORY CARDS GRID (Dashboard)
    ═══════════════════════════════════════════════════════ */
 .category-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
     gap: 12px;
     padding: 20px 24px 16px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+.category-cards-grid::-webkit-scrollbar {
+    height: 5px;
+}
+.category-cards-grid::-webkit-scrollbar-track {
+    background: transparent;
+}
+.category-cards-grid::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+.category-cards-grid::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
 }
 
 .category-card {
@@ -1856,6 +1873,8 @@ h1, h2, h3, h4, h5, h6 {
     text-align: center;
     overflow: hidden;
     gap: 6px;
+    flex: 0 0 140px;
+    width: 140px;
 }
 
 .category-card::before {
