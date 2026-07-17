@@ -269,6 +269,7 @@
 
     // ─── ADMIN PAGE ──────────────────────────────────────
     function openAdminPage() {
+        window.closeAllCustomSelects(null, true);
         isAdminPageOpen = true;
         document.getElementById('notes-container').style.display = 'none';
         document.getElementById('empty-state').style.display = 'none';
@@ -306,6 +307,7 @@
     }
 
     function closeAdminPage() {
+        window.closeAllCustomSelects(null, true);
         isAdminPageOpen = false;
         document.getElementById('admin-page').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = '';
@@ -1614,6 +1616,7 @@
     }
 
     async function openWordPressEditor(mode, noteId = null) {
+        window.closeAllCustomSelects(null, true);
         document.body.classList.add('in-editor');
         document.getElementById('editor-page').style.display = 'flex';
         
@@ -1754,6 +1757,7 @@
     }
 
     function closeWordPressEditor() {
+        window.closeAllCustomSelects(null, true);
         document.body.classList.remove('in-editor');
         document.getElementById('editor-page').style.display = 'none';
         if (autosaveTimer) clearTimeout(autosaveTimer);
@@ -2953,7 +2957,7 @@
         }
     }
 
-    function closeDropdown(wrapper) {
+    function closeDropdown(wrapper, immediate = false) {
         const selectId = wrapper.dataset.selectId;
         const optionsContainer = wrapper.querySelector('.custom-select-options') || 
             document.body.querySelector(`.custom-select-options[data-select-id="${selectId}"]`);
@@ -2963,7 +2967,7 @@
         optionsContainer.style.opacity = '0';
         optionsContainer.style.transform = '';
         
-        setTimeout(() => {
+        const finishClose = () => {
             optionsContainer.style.visibility = 'hidden';
             optionsContainer.style.display = 'none';
             // Return back to wrapper
@@ -2976,7 +2980,13 @@
             optionsContainer.style.zIndex = '';
             wrapper.classList.remove('open');
             wrapper.classList.remove('open-up');
-        }, 150);
+        };
+
+        if (immediate) {
+            finishClose();
+        } else {
+            setTimeout(finishClose, 150);
+        }
     }
 
     function initCustomSelects() {
@@ -3173,12 +3183,12 @@
     // Expose helpers globally
     window.initCustomSelects = initCustomSelects;
     window.syncCustomSelects = syncCustomSelects;
-    window.closeAllCustomSelects = (e) => {
+    window.closeAllCustomSelects = (e, immediate = false) => {
         // If scrolling inside the custom select options container itself, do NOT close the dropdown
         if (e && e.target && e.target.closest('.custom-select-options')) {
             return;
         }
-        document.querySelectorAll('.custom-select-wrapper.open').forEach(closeDropdown);
+        document.querySelectorAll('.custom-select-wrapper.open').forEach(w => closeDropdown(w, immediate));
     };
 
     // Close open dropdowns on page or modal scroll to keep fixed alignment accurate
