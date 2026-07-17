@@ -345,6 +345,7 @@
         if (tabId === 'ap-teams-tab') fetchTeams();
         if (tabId === 'ap-settings-tab') loadAdminSettings();
         if (tabId === 'ap-audit-tab') loadAdminAudit();
+        if (tabId === 'ap-analytics-tab') loadAdminAnalytics();
     }
 
     // ─── NOTE TYPE TOGGLE ────────────────────────────────
@@ -2601,6 +2602,12 @@
 
     let systemStatusTimer = null;
 
+    function getGaugeColor(percent) {
+        if (percent < 60) return '#10b981'; // Green
+        if (percent < 85) return '#f59e0b'; // Orange/Yellow
+        return '#ef4444'; // Red
+    }
+
     async function fetchSystemStatus() {
         if (currentRole !== 'admin') return;
         try {
@@ -2611,17 +2618,23 @@
             // Server Metrics
             const s = data.server || {};
             const cpuVal = s.cpu_percent || 0.0;
+            const cpuEl = document.getElementById('gauge-cpu');
             document.getElementById('gauge-cpu-text').textContent = cpuVal.toFixed(1) + '%';
-            document.getElementById('gauge-cpu').style.strokeDashoffset = 182.2 - (cpuVal / 100) * 182.2;
+            cpuEl.style.strokeDashoffset = 182.2 - (cpuVal / 100) * 182.2;
+            cpuEl.setAttribute('stroke', getGaugeColor(cpuVal));
             
             const memVal = s.memory_percent || 0.0;
+            const memEl = document.getElementById('gauge-mem');
             document.getElementById('gauge-mem-text').textContent = memVal.toFixed(0) + '%';
-            document.getElementById('gauge-mem').style.strokeDashoffset = 182.2 - (memVal / 100) * 182.2;
+            memEl.style.strokeDashoffset = 182.2 - (memVal / 100) * 182.2;
+            memEl.setAttribute('stroke', getGaugeColor(memVal));
             document.getElementById('text-metric-mem').textContent = `${s.memory_used_mb || 0} MB / ${s.memory_total_mb || 0} MB`;
             
             const diskVal = s.disk_percent || 0.0;
+            const diskEl = document.getElementById('gauge-disk');
             document.getElementById('gauge-disk-text').textContent = diskVal.toFixed(0) + '%';
-            document.getElementById('gauge-disk').style.strokeDashoffset = 182.2 - (diskVal / 100) * 182.2;
+            diskEl.style.strokeDashoffset = 182.2 - (diskVal / 100) * 182.2;
+            diskEl.setAttribute('stroke', getGaugeColor(diskVal));
             document.getElementById('text-metric-disk').textContent = `${s.disk_used_gb || 0.0} GB / ${s.disk_total_gb || 0.0} GB`;
             
             // Format uptime
@@ -3194,6 +3207,53 @@
             </tr>`;
         });
         tbody.innerHTML = html;
+    }
+
+    async function loadAdminAnalytics() {
+        const res = await apiFetch('api/admin/analytics', { headers: authHeaders() });
+        if (!res || !res.ok) return;
+        const data = await res.json();
+        
+        // 1. Metrics Cards
+        document.getElementById('analytics-total-users').textContent = data.total_users || 0;
+        document.getElementById('analytics-total-views').textContent = data.total_views || 0;
+        document.getElementById('analytics-active-users').textContent = data.active_users_24h || 0;
+        
+        // 2. Most Visited Notes Table
+        const visitedTbody = document.getElementById('analytics-visited-table-body');
+        if (visitedTbody) {
+            let html = '';
+            if (!data.most_visited || data.most_visited.length === 0) {
+                html = '<tr><td colspan="2" style="text-align: center; color: var(--text-tertiary); padding: 20px;">No note visits recorded yet.</td></tr>';
+            } else {
+                data.most_visited.forEach(n => {
+                    html += `<tr>
+                        <td><a href="/note/${n.id}" target="_blank" style="color: var(--accent); text-decoration: none; font-weight: 600;">${escapeHTML(n.title)}</a></td>
+                        <td style="text-align: right; font-weight: 600; color: #10b981;">${n.views}</td>
+                    </tr>`;
+                });
+            }
+            visitedTbody.innerHTML = html;
+        }
+
+        // 3. Recent Note Views Table
+        const recentTbody = document.getElementById('analytics-recent-table-body');
+        if (recentTbody) {
+            let html = '';
+            if (!data.recent_views || data.recent_views.length === 0) {
+                html = '<tr><td colspan="3" style="text-align: center; color: var(--text-tertiary); padding: 20px;">No recent activity.</td></tr>';
+            } else {
+                data.recent_views.forEach(v => {
+                    const localTime = new Date(v.last_accessed + 'Z').toLocaleString();
+                    html += `<tr>
+                        <td style="font-weight: 600;">${escapeHTML(v.username)}</td>
+                        <td><a href="/note/${v.note_id}" target="_blank" style="color: var(--accent); text-decoration: none; font-weight: 600;">${escapeHTML(v.title)}</a></td>
+                        <td style="text-align: right; font-size: 0.8rem; color: var(--text-secondary);">${localTime}</td>
+                    </tr>`;
+                });
+            }
+            recentTbody.innerHTML = html;
+        }
     }
 
     function setupVisibilityListeners() {

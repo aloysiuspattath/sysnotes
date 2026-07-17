@@ -662,3 +662,59 @@ def flush_cache():
     activity_cache.clear()
     return jsonify({'message': 'System cache cleared successfully'})
 
+@admin_bp.route('/api/admin/analytics', methods=['GET'])
+@admin_required
+def get_analytics():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        
+        # 1. Total users
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        total_users = cursor.fetchone()['count']
+        
+        # 2. Total note views
+        cursor.execute("SELECT SUM(access_count) as views FROM user_note_access")
+        total_views = cursor.fetchone()['views'] or 0
+        
+        # 3. Active users in last 24 hours (UTC)
+        cursor.execute("""
+            SELECT COUNT(DISTINCT id) as active_count 
+            FROM users 
+            WHERE last_active >= datetime('now', '-24 hours')
+        """)
+        active_users_24h = cursor.fetchone()['active_count']
+        
+        # 4. Most visited notes
+        cursor.execute("""
+            SELECT n.id, n.title, SUM(a.access_count) as views
+            FROM user_note_access a
+            JOIN notes n ON a.note_id = n.id
+            GROUP BY n.id
+            ORDER BY views DESC
+            LIMIT 5
+        """)
+        most_visited = [dict(row) for row in cursor.fetchall()]
+        
+        # 5. Recent views
+        cursor.execute("""
+            SELECT u.username, n.id as note_id, n.title, a.last_accessed
+            FROM user_note_access a
+            JOIN users u ON a.user_id = u.id
+            JOIN notes n ON a.note_id = n.id
+            ORDER BY a.last_accessed DESC
+            LIMIT 5
+        """)
+        recent_views = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'total_users': total_users,
+            'total_views': total_views,
+            'active_users_24h': active_users_24h,
+            'most_visited': most_visited,
+            'recent_views': recent_views
+        })
+    finally:
+        conn.close()
+
+
