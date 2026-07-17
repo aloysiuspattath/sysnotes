@@ -883,6 +883,10 @@
 
         /* ── Print styles ────────────────────────────────── */
         @media print {
+            @page {
+                margin: 0;
+            }
+
             .topbar,
             .note-detail-sidebar,
             .actions-card,
@@ -907,12 +911,13 @@
             body {
                 background: var(--bg) !important;
                 color: var(--text) !important;
+                margin: 0 !important;
             }
 
             .page {
                 max-width: 100% !important;
                 width: 100% !important;
-                padding: 0 !important;
+                padding: 40px !important;
                 margin: 0 !important;
             }
 
