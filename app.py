@@ -319,6 +319,28 @@ def get_note_by_id(note_id):
             {"id": r["id"], "url": "/uploads/" + r["filename"], "name": r["original_name"]}
             for r in cursor.fetchall()
         ]
+
+        # Log access and fetch favorite status for logged-in users
+        if current_user_id:
+            cursor.execute("SELECT 1 FROM user_note_access WHERE user_id = ? AND note_id = ?", (current_user_id, note_id))
+            if cursor.fetchone():
+                cursor.execute(
+                    "UPDATE user_note_access SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP "
+                    "WHERE user_id = ? AND note_id = ?",
+                    (current_user_id, note_id)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO user_note_access (user_id, note_id, access_count) VALUES (?, ?, 1)",
+                    (current_user_id, note_id)
+                )
+            conn.commit()
+
+            cursor.execute("SELECT 1 FROM user_favorites WHERE user_id = ? AND note_id = ?", (current_user_id, note_id))
+            note["is_favorite"] = bool(cursor.fetchone())
+        else:
+            note["is_favorite"] = False
+
         return jsonify(note)
     finally:
         conn.close()
@@ -899,6 +921,7 @@ def get_notes():
         tag = request.args.get('tag', '').strip()
         team_filter = request.args.get('team', '').strip()
         status = request.args.get('status', '').strip()
+        favorite_only = request.args.get('favorite', '').strip().lower() == 'true'
 
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 50, type=int)
@@ -989,6 +1012,12 @@ def get_notes():
             else:
                 conditions.append("n.visibility = 'global'")
 
+        if favorite_only:
+            if not user_id:
+                return jsonify({'message': 'Authentication required!'}), 401
+            conditions.append("n.id IN (SELECT note_id FROM user_favorites WHERE user_id = ?)")
+            params.append(user_id)
+
         sql = base_select
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
@@ -998,6 +1027,12 @@ def get_notes():
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
+
+        # Fetch user's favorited note IDs
+        fav_note_ids = set()
+        if user_id:
+            cursor.execute("SELECT note_id FROM user_favorites WHERE user_id = ?", (user_id,))
+            fav_note_ids = {r['note_id'] for r in cursor.fetchall()}
 
         # Batch fetch tags to avoid N+1
         note_ids = [str(r['id']) for r in rows]
@@ -1023,6 +1058,7 @@ def get_notes():
             note['tags'] = tags_map.get(note['id'], [])
             note['steps'] = []  # Trimmed for performance, load on detail view
             note['images'] = [] # Trimmed for performance, load on detail view
+            note['is_favorite'] = note['id'] in fav_note_ids
             notes.append(note)
 
         return jsonify(notes)
@@ -1601,6 +1637,122 @@ def get_note_audit(note_id):
         cursor.execute("SELECT * FROM audit_logs WHERE note_id = ? ORDER BY timestamp DESC", (note_id,))
         logs = [dict(row) for row in cursor.fetchall()]
         return jsonify(logs)
+    finally:
+        conn.close()
+
+@app.route('/api/notes/<int:note_id>/favorite', methods=['POST'])
+def toggle_note_favorite(note_id):
+    current_user_id = None
+    token = request.headers.get('Authorization')
+    if token:
+        if token.startswith('Bearer '):
+            token = token[7:]
+        payload = decode_token(token)
+        if not isinstance(payload, str):
+            current_user_id = payload.get('sub')
+            
+    if not current_user_id:
+        return jsonify({'message': 'Authentication required!'}), 401
+        
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM notes WHERE id = ?", (note_id,))
+        if not cursor.fetchone():
+            return jsonify({"message": "Note not found"}), 404
+            
+        cursor.execute("SELECT 1 FROM user_favorites WHERE user_id = ? AND note_id = ?", (current_user_id, note_id))
+        is_fav = cursor.fetchone()
+        if is_fav:
+            cursor.execute("DELETE FROM user_favorites WHERE user_id = ? AND note_id = ?", (current_user_id, note_id))
+            favorite = False
+        else:
+            cursor.execute("INSERT INTO user_favorites (user_id, note_id) VALUES (?, ?)", (current_user_id, note_id))
+            favorite = True
+        conn.commit()
+        return jsonify({"is_favorite": favorite})
+    finally:
+        conn.close()
+
+@app.route('/api/notes/frequent', methods=['GET'])
+def get_frequent_notes():
+    current_user_id = None
+    current_role = None
+    user_team_ids = []
+    token = request.headers.get('Authorization')
+    if token:
+        if token.startswith('Bearer '):
+            token = token[7:]
+        payload = decode_token(token)
+        if not isinstance(payload, str):
+            current_user_id = payload.get('sub')
+            current_role = payload.get('role')
+            user_team_ids = payload.get('teams', [])
+            
+    if not current_user_id:
+        return jsonify({'message': 'Authentication required!'}), 401
+        
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT note_id FROM user_note_access "
+            "WHERE user_id = ? "
+            "ORDER BY access_count DESC, last_accessed DESC "
+            "LIMIT 5",
+            (current_user_id,)
+        )
+        note_ids = [r['note_id'] for r in cursor.fetchall()]
+        if not note_ids:
+            return jsonify([])
+            
+        placeholders = ','.join('?' for _ in note_ids)
+        sql = f"""
+            SELECT n.id, n.title, n.command, n.description, n.note_type,
+                   n.category_id, c.name as category_name,
+                   n.created_at, n.updated_at, n.created_by,
+                   u.username as created_by_username, n.approved, n.status,
+                   n.team_id, n.visibility, tm.name as team_name
+            FROM notes n
+            LEFT JOIN categories c ON n.category_id = c.id
+            LEFT JOIN users u ON n.created_by = u.id
+            LEFT JOIN teams tm ON n.team_id = tm.id
+            WHERE n.id IN ({placeholders})
+        """
+        params = list(note_ids)
+        
+        conditions = []
+        if current_role != 'admin':
+            if current_role == 'moderator':
+                conditions.append("(n.status = 'published' OR n.created_by = ?)")
+                params.append(current_user_id)
+            else:
+                conditions.append("((n.approved = 1 AND n.status = 'published') OR n.created_by = ?)")
+                params.append(current_user_id)
+                
+            if user_team_ids:
+                team_placeholders = ','.join('?' for _ in user_team_ids)
+                conditions.append(f"(n.visibility = 'global' OR n.team_id IN ({team_placeholders}))")
+                params.extend(user_team_ids)
+            else:
+                conditions.append("n.visibility = 'global'")
+                
+        if conditions:
+            sql += " AND " + " AND ".join(conditions)
+            
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        
+        notes_map = {r['id']: dict(r) for r in rows}
+        ordered_notes = []
+        for nid in note_ids:
+            if nid in notes_map:
+                note = notes_map[nid]
+                cursor.execute("SELECT 1 FROM user_favorites WHERE user_id = ? AND note_id = ?", (current_user_id, nid))
+                note['is_favorite'] = bool(cursor.fetchone())
+                ordered_notes.append(note)
+                
+        return jsonify(ordered_notes)
     finally:
         conn.close()
 

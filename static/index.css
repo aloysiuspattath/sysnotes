@@ -2895,6 +2895,67 @@ body.in-editor .main-content {
     font-size: 0.85rem;
 }
 
+/* ─── Favorites & Quick Access ─────────────────────── */
+.note-item:has(.note-favorite-btn.active) .note-actions {
+    opacity: 1;
+}
+
+.note-favorite-btn {
+    color: var(--text-secondary);
+    opacity: 0.6;
+    transition: color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.note-favorite-btn:hover {
+    color: #f59e0b !important;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.note-favorite-btn.active {
+    color: #f59e0b !important;
+    opacity: 1;
+}
+
+.quick-access-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.quick-access-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.quick-access-item:hover {
+    background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);
+    color: var(--text-primary);
+}
+
+.quick-access-icon {
+    display: flex;
+    align-items: center;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.quick-access-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* ─── Print styles ────────────────────────────────── */
 @media print {
     @page {

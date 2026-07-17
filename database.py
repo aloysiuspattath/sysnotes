@@ -260,6 +260,31 @@ def init_db():
         )
     ''')
 
+    # Favorites table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_favorites (
+            user_id INTEGER NOT NULL,
+            note_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, note_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Note Access logs table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_note_access (
+            user_id INTEGER NOT NULL,
+            note_id INTEGER NOT NULL,
+            access_count INTEGER DEFAULT 1,
+            last_accessed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, note_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+        )
+    ''')
+
     # FTS5 Virtual Table for blazing fast search on notes
     cursor.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(

@@ -100,6 +100,31 @@
                 </div>
             </div>
 
+            <!-- Favorites -->
+            <div id="sidebar-favorites-notes" class="sidebar-section" style="cursor:pointer;" onclick="toggleFavoriteFilter()">
+                <div class="sidebar-section-label" style="display: flex; justify-content: space-between; align-items: center; transition: color 0.2s;" onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='var(--text-secondary)'">
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <svg class="star-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        Favorites
+                    </span>
+                </div>
+            </div>
+
+            <!-- Quick Access -->
+            <div id="sidebar-quick-access" class="sidebar-section sidebar-quick-access" style="display:none; margin-top: 1.5rem;">
+                <div class="sidebar-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    Quick Access
+                </div>
+                <ul id="quick-access-list" class="quick-access-list">
+                    <!-- populated by JS -->
+                </ul>
+            </div>
+
             <!-- Categories -->
             <div class="sidebar-section sidebar-categories" style="margin-top: 2rem;">
                 <div class="sidebar-section-label">

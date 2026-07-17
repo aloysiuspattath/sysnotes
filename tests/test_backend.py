@@ -456,5 +456,92 @@ class BackendTestCase(unittest.TestCase):
         response = self.client.get(f'/api/notes/{team_b_note_id}', headers=headers_author1)
         self.assertEqual(response.status_code, 403)
 
+    def test_note_favorites(self):
+        headers_author1 = {'Authorization': 'Bearer ' + self.author1_token}
+        
+        # Create a note
+        note_data = {
+            'title': 'Fav Test Note',
+            'command': 'echo 1',
+            'description': 'fav desc',
+            'note_type': 'command',
+            'status': 'published'
+        }
+        res = self.client.post('/api/notes', json=note_data, headers=headers_author1)
+        note_id = res.get_json()['id']
+        
+        # Approve the note via admin
+        self.client.post(f'/api/notes/{note_id}/approve', headers={'Authorization': 'Bearer ' + self.admin_token})
+
+        # Fetch notes: is_favorite should be False initially
+        res = self.client.get('/api/notes', headers=headers_author1)
+        self.assertFalse(res.get_json()[0]['is_favorite'])
+
+        # Toggle favorite: should return is_favorite=True
+        res = self.client.post(f'/api/notes/{note_id}/favorite', headers=headers_author1)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.get_json()['is_favorite'])
+
+        # Fetch notes: is_favorite should now be True
+        res = self.client.get('/api/notes', headers=headers_author1)
+        self.assertTrue(res.get_json()[0]['is_favorite'])
+
+        # Filter by favorite=true
+        res = self.client.get('/api/notes?favorite=true', headers=headers_author1)
+        self.assertEqual(len(res.get_json()), 1)
+        self.assertEqual(res.get_json()[0]['id'], note_id)
+
+        # Toggle favorite again: should return is_favorite=False
+        res = self.client.post(f'/api/notes/{note_id}/favorite', headers=headers_author1)
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.get_json()['is_favorite'])
+
+        # Filter by favorite=true: should be empty
+        res = self.client.get('/api/notes?favorite=true', headers=headers_author1)
+        self.assertEqual(len(res.get_json()), 0)
+
+    def test_note_quick_access(self):
+        headers_author1 = {'Authorization': 'Bearer ' + self.author1_token}
+        
+        # Create two notes
+        note1_res = self.client.post('/api/notes', json={
+            'title': 'QA Note 1',
+            'command': 'echo 1',
+            'description': 'desc 1',
+            'note_type': 'command',
+            'status': 'published'
+        }, headers=headers_author1)
+        note1_id = note1_res.get_json()['id']
+
+        note2_res = self.client.post('/api/notes', json={
+            'title': 'QA Note 2',
+            'command': 'echo 2',
+            'description': 'desc 2',
+            'note_type': 'command',
+            'status': 'published'
+        }, headers=headers_author1)
+        note2_id = note2_res.get_json()['id']
+
+        # Approve both
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        self.client.post(f'/api/notes/{note1_id}/approve', headers=headers_admin)
+        self.client.post(f'/api/notes/{note2_id}/approve', headers=headers_admin)
+
+        # Trigger access increments by calling get_note_by_id
+        # Access note 2 twice, note 1 once
+        self.client.get(f'/api/notes/{note2_id}', headers=headers_author1)
+        self.client.get(f'/api/notes/{note2_id}', headers=headers_author1)
+        self.client.get(f'/api/notes/{note1_id}', headers=headers_author1)
+
+        # Fetch frequent notes
+        res = self.client.get('/api/notes/frequent', headers=headers_author1)
+        self.assertEqual(res.status_code, 200)
+        frequent = res.get_json()
+        self.assertEqual(len(frequent), 2)
+        
+        # Note 2 must be first since it has 2 accesses, and Note 1 second with 1 access
+        self.assertEqual(frequent[0]['id'], note2_id)
+        self.assertEqual(frequent[1]['id'], note1_id)
+
 if __name__ == '__main__':
     unittest.main()

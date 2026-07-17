@@ -68,6 +68,7 @@
     let activeCategoryName = null;
     let activePending = false;
     let activeDrafts = false;
+    let activeFavorites = false;
     let activeTag = null;
     let activeTeamFilter = window.DEFAULT_TEAM_FILTER || null;
     let allNotes = [];
@@ -220,13 +221,17 @@
         const loggedIn = document.getElementById('auth-logged-in');
         const usernameEl = document.getElementById('auth-username');
         const adminBtn = document.getElementById('admin-btn');
+        const favNav = document.getElementById('sidebar-favorites-notes');
+        const qaNav = document.getElementById('sidebar-quick-access');
         if (currentToken) {
             loggedOut.style.display = 'none';
             loggedIn.style.display = 'flex';
             usernameEl.textContent = currentUsername || '';
             if (adminBtn) adminBtn.style.display = (currentRole === 'admin' || currentRole === 'moderator') ? '' : 'none';
+            if (favNav) favNav.style.display = 'block';
             updatePendingCount();
             updateDraftCount();
+            fetchQuickAccessNotes();
         } else {
             loggedOut.style.display = 'flex';
             loggedIn.style.display = 'none';
@@ -235,6 +240,8 @@
             if (pendingNav) pendingNav.style.display = 'none';
             const draftNav = document.getElementById('sidebar-draft-notes');
             if (draftNav) draftNav.style.display = 'none';
+            if (favNav) favNav.style.display = 'none';
+            if (qaNav) qaNav.style.display = 'none';
         }
     }
 
@@ -247,9 +254,11 @@
         localStorage.removeItem('sn_teams');
         activePending = false;
         activeDrafts = false;
+        activeFavorites = false;
         updateAuthUI();
         if (isAdminPageOpen) closeAdminPage();
         renderNotes(allNotes);
+        updateSidebarFavoritesUI();
     }
 
     // ─── MODALS ──────────────────────────────────────────
@@ -820,6 +829,7 @@
         if (activeTag) params.push('tag=' + encodeURIComponent(activeTag));
         if (activePending) params.push('status=pending');
         if (activeDrafts) params.push('status=draft');
+        if (activeFavorites) params.push('favorite=true');
         if (activeTeamFilter) params.push('team=' + encodeURIComponent(activeTeamFilter));
         url += params.join('&');
         
@@ -921,7 +931,7 @@
         if (modalList) modalList.innerHTML = html;
     }
 
-    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); fetchTeams(); updatePendingCount(); updateDraftCount(); }
+    function refreshAll() { fetchNotes(); fetchCategories(); fetchTags(); fetchStats(); fetchTeams(); updatePendingCount(); updateDraftCount(); fetchQuickAccessNotes(); }
 
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
@@ -958,11 +968,13 @@
                 activeTag = null;
                 activePending = false;
                 activeDrafts = false;
+                activeFavorites = false;
                 updateFilterIndicator();
                 fetchNotes();
                 renderSidebarCategories(allCategories);
                 renderCategoryCards(allCategories);
                 renderTags(allTags);
+                updateSidebarFavoritesUI();
             });
         });
     }
@@ -986,9 +998,11 @@
                 if (activeCategory == id) { activeCategory = null; activeCategoryName = null; }
                 else { activeCategory = id; const cat = allCategories.find(c => c.id == id); activeCategoryName = cat ? cat.name : ''; }
                 activeTag = null; activePending = false; activeDrafts = false;
+                activeFavorites = false;
                 if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+                updateSidebarFavoritesUI();
             });
         });
     }
@@ -1010,9 +1024,11 @@
                 if (activeTag === tagName) { activeTag = null; }
                 else { activeTag = tagName; }
                 activeCategory = null; activeCategoryName = null; activePending = false; activeDrafts = false;
+                activeFavorites = false;
                 if (isAdminPageOpen) closeAdminPage();
                 updateFilterIndicator(); fetchNotes();
                 renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+                updateSidebarFavoritesUI();
             });
         });
     }
@@ -1026,6 +1042,9 @@
             el.style.display = 'inline-flex';
         } else if (activeDrafts) {
             textEl.innerHTML = '<span style="color:var(--accent); display:flex; align-items:center; gap:6px;">✍️ My Draft Notes</span>';
+            el.style.display = 'inline-flex';
+        } else if (activeFavorites) {
+            textEl.innerHTML = '<span style="color:#f59e0b; display:flex; align-items:center; gap:6px;">⭐ Favorites</span>';
             el.style.display = 'inline-flex';
         } else if (activeCategory) {
             textEl.textContent = 'Category: ' + (activeCategoryName || activeCategory);
@@ -1043,6 +1062,7 @@
 
     function clearFilter() {
         activeCategory = null; activeCategoryName = null; activeTag = null; activePending = false; activeDrafts = false;
+        activeFavorites = false;
         activeTeamFilter = null;
         if (window.history && window.history.pushState) {
             window.history.pushState(null, null, '/');
@@ -1050,6 +1070,7 @@
         if (isAdminPageOpen) closeAdminPage();
         updateFilterIndicator(); fetchNotes();
         renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+        updateSidebarFavoritesUI();
     }
 
     window.showMyPendingNotes = function() {
@@ -1060,12 +1081,15 @@
             activePending = true;
             activeDrafts = false;
             activeCategory = null; activeCategoryName = null; activeTag = null;
+            activeFavorites = false;
             document.getElementById('notes-container').style.display = '';
             document.getElementById('empty-state').style.display = 'none';
             document.getElementById('category-cards-grid').style.display = 'none';
             if (isAdminPageOpen) closeAdminPage();
             updateFilterIndicator();
             fetchNotes();
+            renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+            updateSidebarFavoritesUI();
             if (window.innerWidth <= 768) closeSidebar();
         }
     };
@@ -1074,12 +1098,15 @@
         activeDrafts = true;
         activePending = false;
         activeCategory = null; activeCategoryName = null; activeTag = null;
+        activeFavorites = false;
         document.getElementById('notes-container').style.display = '';
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('category-cards-grid').style.display = 'none';
         if (isAdminPageOpen) closeAdminPage();
         updateFilterIndicator();
         fetchNotes();
+        renderSidebarCategories(allCategories); renderCategoryCards(allCategories); renderTags(allTags);
+        updateSidebarFavoritesUI();
         if (window.innerWidth <= 768) closeSidebar();
     };
     
@@ -1147,13 +1174,27 @@
         const isCreator = (currentToken && note.created_by_username === currentUsername);
         const canModify = currentToken && (currentRole === 'admin' || currentRole === 'moderator' || isCreator);
         
+        let favoriteBtn = '';
+        if (currentToken) {
+            const isFav = !!note.is_favorite;
+            favoriteBtn = `
+                <button class="btn-icon note-favorite-btn ${isFav ? 'active' : ''}" data-id="${note.id}" title="${isFav ? 'Unfavorite' : 'Favorite'}">
+                    <svg class="star-icon" width="16" height="16" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                </button>
+            `;
+        }
+
         const actions = isReviewMode
             ? ''
-            : (canModify
-                ? `<div class="note-actions">
-                    <button class="btn-icon note-edit-btn" data-id="${note.id}" title="Edit">${ICONS.edit}</button>
-                    <button class="btn-icon btn-icon-danger note-delete-btn" data-id="${note.id}" title="Delete">${ICONS.trash}</button>
-                   </div>` : '');
+            : `<div class="note-actions">
+                ${favoriteBtn}
+                ${canModify
+                    ? `<button class="btn-icon note-edit-btn" data-id="${note.id}" title="Edit">${ICONS.edit}</button>
+                       <button class="btn-icon btn-icon-danger note-delete-btn" data-id="${note.id}" title="Delete">${ICONS.trash}</button>`
+                    : ''}
+               </div>`;
 
         const isProcedure = note.note_type === 'procedure';
         const typeBadge = `<span class="note-type-badge ${isProcedure ? 'type-procedure' : 'type-command'}">${isProcedure ? ICONS.steps + ' Procedure' : ICONS.copy + ' Command'}</span>`;
@@ -2578,6 +2619,14 @@
                     return;
                 }
 
+                // Toggle Favorite
+                const favBtn = e.target.closest('.note-favorite-btn');
+                if (favBtn) {
+                    e.stopPropagation();
+                    toggleNoteFavorite(favBtn.dataset.id, favBtn);
+                    return;
+                }
+
                 // Edit Note
                 const editBtn = e.target.closest('.note-edit-btn');
                 if (editBtn) {
@@ -3190,6 +3239,123 @@
         }
         document.querySelectorAll('.custom-select-wrapper.open').forEach(w => closeDropdown(w, immediate));
     };
+
+    async function toggleNoteFavorite(noteId, btn) {
+        if (!currentToken) {
+            showToast('Authentication required!', 'danger');
+            return;
+        }
+        try {
+            const res = await apiFetch(`api/notes/${noteId}/favorite`, {
+                method: 'POST',
+                headers: authHeaders()
+            });
+            if (res && res.ok) {
+                const data = await res.json();
+                const isFav = data.is_favorite;
+                
+                // Update button UI
+                btn.classList.toggle('active', isFav);
+                const svg = btn.querySelector('svg');
+                if (svg) {
+                    svg.setAttribute('fill', isFav ? 'currentColor' : 'none');
+                }
+                btn.title = isFav ? 'Unfavorite' : 'Favorite';
+                
+                // Update local cache
+                const cachedNote = allNotes.find(n => n.id == noteId);
+                if (cachedNote) {
+                    cachedNote.is_favorite = isFav;
+                }
+                
+                showToast(isFav ? 'Added to favorites ⭐' : 'Removed from favorites', 'success');
+                
+                // If favorites filter is active, re-render
+                if (activeFavorites) {
+                    renderNotes(allNotes.filter(n => n.is_favorite));
+                }
+            } else {
+                showToast('Failed to toggle favorite', 'danger');
+            }
+        } catch (e) {
+            showToast('Error connecting to server', 'danger');
+        }
+    }
+
+    async function fetchQuickAccessNotes() {
+        const el = document.getElementById('sidebar-quick-access');
+        const list = document.getElementById('quick-access-list');
+        if (!el || !list) return;
+
+        if (!currentToken) {
+            el.style.display = 'none';
+            return;
+        }
+
+        try {
+            const res = await apiFetch('api/notes/frequent', { headers: authHeaders() });
+            if (res && res.ok) {
+                const notes = await res.json();
+                if (notes && notes.length > 0) {
+                    let html = '';
+                    notes.forEach(note => {
+                        const icon = note.note_type === 'procedure' ? ICONS.steps : ICONS.copy;
+                        html += `<li class="quick-access-item" data-id="${note.id}">
+                            <span class="quick-access-icon">${icon}</span>
+                            <span class="quick-access-title" title="${escapeHTML(note.title)}">${escapeHTML(note.title)}</span>
+                        </li>`;
+                    });
+                    list.innerHTML = html;
+                    el.style.display = 'block';
+
+                    list.querySelectorAll('.quick-access-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            window.open('note/' + item.dataset.id, '_blank');
+                        });
+                    });
+                } else {
+                    el.style.display = 'none';
+                }
+            } else {
+                el.style.display = 'none';
+            }
+        } catch (e) {
+            el.style.display = 'none';
+        }
+    }
+
+    window.toggleFavoriteFilter = function() {
+        if (!currentToken) {
+            showToast('Authentication required!', 'danger');
+            return;
+        }
+        activeFavorites = !activeFavorites;
+        if (activeFavorites) {
+            activeCategory = null;
+            activeCategoryName = null;
+            activeTag = null;
+            activePending = false;
+            activeDrafts = false;
+        }
+        if (isAdminPageOpen) closeAdminPage();
+        updateFilterIndicator();
+        fetchNotes();
+        renderSidebarCategories(allCategories);
+        renderCategoryCards(allCategories);
+        renderTags(allTags);
+        updateSidebarFavoritesUI();
+    };
+
+    function updateSidebarFavoritesUI() {
+        const el = document.getElementById('sidebar-favorites-notes');
+        if (el) {
+            el.classList.toggle('active', activeFavorites);
+            const label = el.querySelector('.sidebar-section-label');
+            if (label) {
+                label.style.color = activeFavorites ? '#f59e0b' : 'var(--text-secondary)';
+            }
+        }
+    }
 
     // Close open dropdowns on page or modal scroll to keep fixed alignment accurate
     window.addEventListener('scroll', window.closeAllCustomSelects, { passive: true });
