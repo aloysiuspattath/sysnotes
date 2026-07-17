@@ -8,6 +8,10 @@ import sqlite3
 
 def run_backup_scheduler(db_path):
     while True:
+        enabled = True
+        retention_days = 7
+        backup_dir = 'backups'
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -22,9 +26,11 @@ def run_backup_scheduler(db_path):
             cursor.execute("SELECT value FROM settings WHERE key='backup_location'")
             row = cursor.fetchone()
             backup_dir = row[0].strip() if row and row[0].strip() else 'backups'
+        finally:
+            if conn is not None:
+                conn.close()
 
-            conn.close()
-
+        try:
             if enabled:
                 if not os.path.exists(backup_dir):
                     os.makedirs(backup_dir, exist_ok=True)

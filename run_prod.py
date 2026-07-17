@@ -42,7 +42,8 @@ if __name__ == "__main__":
     cert_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cert.pem')
     key_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'key.pem')
 
-    server = WSGIServer((host, port), app, numthreads=10)
+    server = WSGIServer((host, port), app, numthreads=50)
+    server.socket_timeout = 30.0
     
     if os.path.exists(cert_path) and os.path.exists(key_path):
         server.ssl_adapter = BuiltinSSLAdapter(cert_path, key_path)

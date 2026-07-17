@@ -3,10 +3,20 @@ SysNotes - Backend
 Author: aloysiuspattath
 GitHub: https://github.com/aloysiuspattath
 """
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, g, has_app_context
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
-from database import init_db, get_db, DATABASE_PATH, UPLOADS_DIR
+from database import init_db, get_db as _orig_get_db, DATABASE_PATH, UPLOADS_DIR
+
+# Fail-safe database connection registry for request context teardown
+def get_db():
+    conn = _orig_get_db()
+    if has_app_context():
+        if 'db_connections' not in g:
+            g.db_connections = []
+        g.db_connections.append(conn)
+    return conn
+
 from backup_service import start_backup_service
 from auth import login_required, admin_required, generate_token, decode_token
 import sqlite3
@@ -63,6 +73,15 @@ def check_ad_login(username, password):
 load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+
+@app.teardown_appcontext
+def teardown_db_connections(exception):
+    if 'db_connections' in g:
+        for conn in g.db_connections:
+            try:
+                conn.close()
+            except:
+                pass
 
 def get_secret_key():
     secret_file = os.path.join(os.path.dirname(__file__), '.secret_key')
