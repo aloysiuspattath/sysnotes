@@ -263,6 +263,7 @@
     }
 
     // ─── MODALS ──────────────────────────────────────────
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { 
         window.closeAllCustomSelects(null, true);
         document.getElementById(id).style.display = 'none'; 
@@ -850,8 +851,12 @@
         
         try {
             const res = await apiFetch(url, { headers: authHeaders() });
-            if (!res) return;
-            const newNotes = await res.json();
+            if (!res || !res.ok) {
+                renderNotes([]);
+                return;
+            }
+            const data = await res.json();
+            const newNotes = Array.isArray(data) ? data : [];
             
             if (newNotes.length < notesPerPage) {
                 hasMoreNotes = false;
@@ -865,6 +870,9 @@
             
             renderNotes(newNotes, !resetPage);
             currentPage++;
+        } catch (err) {
+            console.error('Error fetching notes:', err);
+            renderNotes([]);
         } finally {
             fetchingNotes = false;
         }
@@ -939,19 +947,29 @@
     }
 
     async function fetchCategories() {
-        const res = await apiFetch('api/categories');
-        if (!res) return;
-        allCategories = await res.json();
-        renderSidebarCategories(allCategories);
-        renderCategoryCards(allCategories);
-        populateCategoryDropdowns(allCategories);
+        try {
+            const res = await apiFetch('api/categories');
+            if (!res || !res.ok) return;
+            const data = await res.json();
+            allCategories = Array.isArray(data) ? data : [];
+            renderSidebarCategories(allCategories);
+            renderCategoryCards(allCategories);
+            populateCategoryDropdowns(allCategories);
+        } catch (err) {
+            console.error('Error fetching categories:', err);
+        }
     }
 
     async function fetchTags() {
-        const res = await apiFetch('api/tags');
-        if (!res) return;
-        allTags = await res.json();
-        renderTags(allTags);
+        try {
+            const res = await apiFetch('api/tags');
+            if (!res || !res.ok) return;
+            const data = await res.json();
+            allTags = Array.isArray(data) ? data : [];
+            renderTags(allTags);
+        } catch (err) {
+            console.error('Error fetching tags:', err);
+        }
     }
 
     async function fetchStats() {
@@ -1019,7 +1037,9 @@
     // ─── RENDER: CATEGORY CARDS ──────────────────────────
     function renderCategoryCards(categories) {
         const grid = document.getElementById('category-cards-grid');
-        const enabledCats = categories.filter(c => c.enabled);
+        if (!grid) return;
+        const safeCategories = Array.isArray(categories) ? categories : [];
+        const enabledCats = safeCategories.filter(c => c.enabled);
         const totalNotes = enabledCats.reduce((sum, c) => sum + (c.note_count || 0), 0);
 
         let html = `<div class="category-card category-card-all${!activeCategory ? ' active' : ''}" data-cat-id="">
@@ -1549,9 +1569,12 @@
     function renderNotes(notes, append = false) {
         const container = document.getElementById('notes-container');
         const emptyState = document.getElementById('empty-state');
+        if (!container || !emptyState) return;
         if (isAdminPageOpen) return;
 
-        if (!append && (!notes || notes.length === 0)) {
+        const safeNotes = Array.isArray(notes) ? notes : [];
+
+        if (!append && safeNotes.length === 0) {
             container.innerHTML = '';
             emptyState.style.display = 'flex';
             
@@ -1563,7 +1586,7 @@
         emptyState.style.display = 'none';
 
         let html = '';
-        notes.forEach((note, idx) => {
+        safeNotes.forEach((note, idx) => {
             // Only apply staggered animation to the first 10 items to prevent lag
             const delay = Math.min(idx * 0.04, 0.4);
             const useDelay = (!append && idx < 10) ? delay : 0;
@@ -2844,40 +2867,51 @@
     //  INIT & EVENT LISTENERS
     // ═══════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', () => {
-        if (localStorage.getItem('sidebar-collapsed') === 'true' && window.innerWidth > 768) {
-            document.body.classList.add('desktop-collapsed');
-        }
-        const quillOptions = {
-            theme: 'snow',
-            bounds: document.body,
-            modules: {
-                toolbar: [
-                    [{ 'header': [1, 2, 3, false] }],
-                    ['bold', 'italic', 'underline', 'strike'],
-                    ['blockquote', 'code-block'],
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    ['link', 'image'],
-                    ['clean']
-                ]
+        try {
+            if (localStorage.getItem('sidebar-collapsed') === 'true' && window.innerWidth > 768) {
+                document.body.classList.add('desktop-collapsed');
             }
-        };
-        if (typeof Quill !== 'undefined') {
-            quillAdd = new Quill('#add-note-plain', quillOptions);
-            quillEdit = new Quill('#edit-note-plain', quillOptions);
-            quillEditor = new Quill('#editor-plain-quill-container', quillOptions);
-        }
+            const quillOptions = {
+                theme: 'snow',
+                bounds: document.body,
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['link', 'image'],
+                        ['clean']
+                    ]
+                }
+            };
+            if (typeof Quill !== 'undefined') {
+                try {
+                    const elAdd = document.getElementById('add-note-plain');
+                    if (elAdd) quillAdd = new Quill(elAdd, quillOptions);
+                    const elEdit = document.getElementById('edit-note-plain');
+                    if (elEdit) quillEdit = new Quill(elEdit, quillOptions);
+                    const elEditor = document.getElementById('editor-plain-quill-container');
+                    if (elEditor) quillEditor = new Quill(elEditor, quillOptions);
+                } catch (qErr) {
+                    console.warn('Quill initialization warning:', qErr);
+                }
+            }
 
-        initTheme();
-        initView();
-        updateAuthUI();
-        fetchStats();
-        fetchCategories();
-        fetchTags();
-        fetchNotes();
-        fetchTeams();
-        setupVisibilityListeners();
-        bindTeamsEventListeners();
-        updateFilterIndicator();
+            initTheme();
+            initView();
+            updateAuthUI();
+            fetchStats();
+            fetchCategories();
+            fetchTags();
+            fetchNotes();
+            fetchTeams();
+            setupVisibilityListeners();
+            bindTeamsEventListeners();
+            updateFilterIndicator();
+        } catch (initErr) {
+            console.error('DOMContentLoaded init error:', initErr);
+        }
 
         // Category Carousel Scroll Buttons
         const catGrid = document.getElementById('category-cards-grid');
