@@ -179,10 +179,10 @@ def get_notes():
 
         if team_filter:
             if team_filter.isdigit():
-                conditions.append("n.team_id = ?")
+                conditions.append("(n.team_id = ? OR n.visibility = 'global')")
                 params.append(int(team_filter))
             else:
-                conditions.append("n.team_id IN (SELECT id FROM teams WHERE LOWER(name) = ?)")
+                conditions.append("(n.team_id IN (SELECT id FROM teams WHERE LOWER(name) = ?) OR n.visibility = 'global')")
                 params.append(team_filter.lower())
 
         # Determine user auth details
