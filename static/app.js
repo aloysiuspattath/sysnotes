@@ -3636,26 +3636,28 @@
         document.querySelectorAll('.custom-select-wrapper.open').forEach(w => closeDropdown(w, immediate));
 
         // Safety fallback: Clean up any portaled optionsContainers attached directly to document.body
-        document.body.querySelectorAll(':scope > .custom-select-options').forEach(oCont => {
-            const sId = oCont.dataset.selectId;
-            const wrapper = document.querySelector(`.custom-select-wrapper[data-select-id="${sId}"]`);
-            if (wrapper) {
-                wrapper.classList.remove('open', 'open-up');
-                wrapper.appendChild(oCont);
-            } else {
-                oCont.remove();
-                return;
+        Array.from(document.body.children).forEach(oCont => {
+            if (oCont.classList && oCont.classList.contains('custom-select-options')) {
+                const sId = oCont.dataset.selectId;
+                const wrapper = document.querySelector(`.custom-select-wrapper[data-select-id="${sId}"]`);
+                if (wrapper) {
+                    wrapper.classList.remove('open', 'open-up');
+                    wrapper.appendChild(oCont);
+                } else {
+                    oCont.remove();
+                    return;
+                }
+                oCont.style.opacity = '0';
+                oCont.style.visibility = 'hidden';
+                oCont.style.display = 'none';
+                oCont.style.position = '';
+                oCont.style.width = '';
+                oCont.style.top = '';
+                oCont.style.left = '';
+                oCont.style.right = '';
+                oCont.style.zIndex = '';
+                oCont.style.transform = '';
             }
-            oCont.style.opacity = '0';
-            oCont.style.visibility = 'hidden';
-            oCont.style.display = 'none';
-            oCont.style.position = '';
-            oCont.style.width = '';
-            oCont.style.top = '';
-            oCont.style.left = '';
-            oCont.style.right = '';
-            oCont.style.zIndex = '';
-            oCont.style.transform = '';
         });
     };
 
