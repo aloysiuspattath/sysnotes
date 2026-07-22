@@ -263,8 +263,8 @@
     }
 
     // ─── MODALS ──────────────────────────────────────────
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { 
+        window.closeAllCustomSelects(null, true);
         document.getElementById(id).style.display = 'none'; 
         if (id === 'login-modal') {
             const step1 = document.getElementById('login-step-1');
@@ -273,7 +273,10 @@
             if (step2) step2.style.display = 'none';
         }
     }
-    function closeAllModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); }
+    function closeAllModals() { 
+        window.closeAllCustomSelects(null, true);
+        document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); 
+    }
     window.openModal = openModal;
     window.closeModal = closeModal;
 
@@ -329,6 +332,7 @@
     }
 
     function switchAdminTab(tabId) {
+        window.closeAllCustomSelects(null, true);
         document.querySelectorAll('.admin-page-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
         document.querySelectorAll('.admin-page-tab-content').forEach(c => {
             c.classList.toggle('active', c.id === tabId);
@@ -3130,10 +3134,10 @@
         initCustomSelects();
 
         // Close custom select dropdowns when clicking outside
-        document.addEventListener('click', () => {
-            document.querySelectorAll('.custom-select-wrapper.open').forEach(wrapper => {
-                wrapper.classList.remove('open');
-            });
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.custom-select-wrapper') && !e.target.closest('.custom-select-options')) {
+                window.closeAllCustomSelects(e, true);
+            }
         });
     });
 
@@ -3395,33 +3399,37 @@
     }
 
     function closeDropdown(wrapper, immediate = false) {
+        if (!wrapper) return;
         const selectId = wrapper.dataset.selectId;
         const optionsContainer = wrapper.querySelector('.custom-select-options') || 
             document.body.querySelector(`.custom-select-options[data-select-id="${selectId}"]`);
             
         if (!optionsContainer) return;
         
-        optionsContainer.style.opacity = '0';
-        optionsContainer.style.transform = '';
-        
+        wrapper.classList.remove('open');
+        wrapper.classList.remove('open-up');
+
         const finishClose = () => {
+            optionsContainer.style.opacity = '0';
             optionsContainer.style.visibility = 'hidden';
             optionsContainer.style.display = 'none';
-            // Return back to wrapper
-            wrapper.appendChild(optionsContainer);
             optionsContainer.style.position = '';
             optionsContainer.style.width = '';
             optionsContainer.style.top = '';
             optionsContainer.style.left = '';
             optionsContainer.style.right = '';
             optionsContainer.style.zIndex = '';
-            wrapper.classList.remove('open');
-            wrapper.classList.remove('open-up');
+            optionsContainer.style.transform = '';
+            if (optionsContainer.parentNode !== wrapper) {
+                wrapper.appendChild(optionsContainer);
+            }
         };
 
         if (immediate) {
             finishClose();
         } else {
+            optionsContainer.style.opacity = '0';
+            optionsContainer.style.transform = '';
             setTimeout(finishClose, 150);
         }
     }
@@ -3579,8 +3587,8 @@
                     optEl.classList.add('selected');
                     trigger.querySelector('span').textContent = opt.textContent;
                     
-                    // Close menu
-                    closeDropdown(wrapper);
+                    // Close menu immediately so it never lingers
+                    closeDropdown(wrapper, true);
                 });
                 optionsContainer.appendChild(optEl);
             });
@@ -3626,6 +3634,29 @@
             return;
         }
         document.querySelectorAll('.custom-select-wrapper.open').forEach(w => closeDropdown(w, immediate));
+
+        // Safety fallback: Clean up any portaled optionsContainers attached directly to document.body
+        document.body.querySelectorAll(':scope > .custom-select-options').forEach(oCont => {
+            const sId = oCont.dataset.selectId;
+            const wrapper = document.querySelector(`.custom-select-wrapper[data-select-id="${sId}"]`);
+            if (wrapper) {
+                wrapper.classList.remove('open', 'open-up');
+                wrapper.appendChild(oCont);
+            } else {
+                oCont.remove();
+                return;
+            }
+            oCont.style.opacity = '0';
+            oCont.style.visibility = 'hidden';
+            oCont.style.display = 'none';
+            oCont.style.position = '';
+            oCont.style.width = '';
+            oCont.style.top = '';
+            oCont.style.left = '';
+            oCont.style.right = '';
+            oCont.style.zIndex = '';
+            oCont.style.transform = '';
+        });
     };
 
     async function toggleNoteFavorite(noteId, btn) {
