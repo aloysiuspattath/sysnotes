@@ -7,9 +7,9 @@ UPLOADS_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads'
 
 def get_db():
     """Return a fresh database connection with Row factory enabled."""
-    conn = sqlite3.connect(DATABASE_PATH, timeout=10.0)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -25,6 +25,7 @@ def init_db():
 
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode = WAL")
 
     # Users table
     cursor.execute('''
@@ -85,15 +86,26 @@ def init_db():
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
-            enabled INTEGER DEFAULT 1
+            enabled INTEGER DEFAULT 1,
+            parent_id INTEGER DEFAULT NULL,
+            sort_order INTEGER DEFAULT 0,
+            team_id INTEGER DEFAULT NULL,
+            FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE CASCADE,
+            FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
         )
     ''')
 
-    # Migration: add 'enabled' column if it doesn't exist (for existing databases)
+    # Migration: add 'enabled', 'parent_id', 'sort_order', 'team_id' columns if they don't exist
     cursor.execute("PRAGMA table_info(categories)")
     columns = [col[1] for col in cursor.fetchall()]
     if 'enabled' not in columns:
         cursor.execute("ALTER TABLE categories ADD COLUMN enabled INTEGER DEFAULT 1")
+    if 'parent_id' not in columns:
+        cursor.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER DEFAULT NULL")
+    if 'sort_order' not in columns:
+        cursor.execute("ALTER TABLE categories ADD COLUMN sort_order INTEGER DEFAULT 0")
+    if 'team_id' not in columns:
+        cursor.execute("ALTER TABLE categories ADD COLUMN team_id INTEGER DEFAULT NULL REFERENCES teams(id) ON DELETE SET NULL")
 
     # Notes table (Main storage)
     cursor.execute('''
@@ -112,6 +124,7 @@ def init_db():
             status TEXT DEFAULT 'published',
             team_id INTEGER,
             visibility TEXT DEFAULT 'global',
+            is_pinned INTEGER DEFAULT 0,
             FOREIGN KEY (category_id) REFERENCES categories(id),
             FOREIGN KEY (created_by) REFERENCES users(id),
             FOREIGN KEY (team_id) REFERENCES teams(id)
@@ -133,6 +146,8 @@ def init_db():
         cursor.execute("ALTER TABLE notes ADD COLUMN team_id INTEGER")
     if 'visibility' not in note_cols:
         cursor.execute("ALTER TABLE notes ADD COLUMN visibility TEXT DEFAULT 'global'")
+    if 'is_pinned' not in note_cols:
+        cursor.execute("ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0")
 
     # Revisions table
     cursor.execute('''
@@ -321,6 +336,11 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_category_id ON notes(category_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_created_by ON notes(created_by)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_approved_created_at ON notes(approved, created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_team_visibility ON notes(team_id, visibility)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_feed_ordering ON notes(approved, status, is_pinned DESC, created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_revisions_note_id ON note_revisions(note_id, created_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_categories_parent_team ON categories(parent_id, team_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_steps_note_id ON note_steps(note_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_images_note_id_step_id ON note_images(note_id, step_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id)")
@@ -337,7 +357,8 @@ def init_db():
     # Insert default categories
     default_categories = [
         'Database', 'Linux', 'Windows', 'Network', 'Docker',
-        'Kubernetes', 'Cloud', 'Security', 'Scripting', 'Other'
+        'Kubernetes', 'Cloud', 'Security', 'Scripting',
+        'A1 Shift', 'A2 Shift', 'A3 Shift', 'General Shift', 'Other'
     ]
     for cat in default_categories:
         cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (cat,))
@@ -402,38 +423,44 @@ def create_team(name, description):
         cursor.execute("INSERT INTO teams (name, description) VALUES (?, ?)", (name, description))
         conn.commit()
         tid = cursor.lastrowid
-        close_db(conn)
         return tid
     except Exception as e:
-        close_db(conn)
+        conn.rollback()
         raise e
+    finally:
+        close_db(conn)
 
 def delete_team(team_id):
     conn = get_db()
     cursor = conn.cursor()
-    # Check if there is only 1 team left (to prevent deletion of the last team)
-    cursor.execute("SELECT COUNT(*) FROM teams")
-    if cursor.fetchone()[0] <= 1:
+    try:
+        # Check if there is only 1 team left (to prevent deletion of the last team)
+        cursor.execute("SELECT COUNT(*) FROM teams")
+        if cursor.fetchone()[0] <= 1:
+            raise ValueError("Cannot delete the only remaining team in the department.")
+        
+        # Reassign orphaned users to another team
+        cursor.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+        cursor.execute("SELECT id FROM teams LIMIT 1")
+        fallback_row = cursor.fetchone()
+        if fallback_row:
+            fallback_team_id = fallback_row[0]
+            cursor.execute("SELECT id FROM users")
+            uids = [row[0] for row in cursor.fetchall()]
+            for uid in uids:
+                cursor.execute("SELECT COUNT(*) FROM user_teams WHERE user_id = ?", (uid,))
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (uid, fallback_team_id))
+                
+        # Reassign notes belonging to deleted team to NULL
+        cursor.execute("UPDATE notes SET team_id = NULL WHERE team_id = ?", (team_id,))
+        cursor.execute("UPDATE note_revisions SET team_id = NULL WHERE team_id = ?", (team_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
         close_db(conn)
-        raise ValueError("Cannot delete the only remaining team in the department.")
-    
-    # Reassign orphaned users to another team
-    cursor.execute("DELETE FROM teams WHERE id = ?", (team_id,))
-    cursor.execute("SELECT id FROM teams LIMIT 1")
-    fallback_team_id = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT id FROM users")
-    uids = [row[0] for row in cursor.fetchall()]
-    for uid in uids:
-        cursor.execute("SELECT COUNT(*) FROM user_teams WHERE user_id = ?", (uid,))
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT OR IGNORE INTO user_teams (user_id, team_id) VALUES (?, ?)", (uid, fallback_team_id))
-            
-    # Reassign notes belonging to deleted team to NULL
-    cursor.execute("UPDATE notes SET team_id = NULL WHERE team_id = ?", (team_id,))
-    cursor.execute("UPDATE note_revisions SET team_id = NULL WHERE team_id = ?", (team_id,))
-    conn.commit()
-    close_db(conn)
 
 if __name__ == '__main__':
     init_db()

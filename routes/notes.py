@@ -2,11 +2,12 @@ import os
 import json
 import re
 import uuid
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from werkzeug.utils import secure_filename
 from db_helper import get_db, allowed_file, log_audit
 from auth import login_required, decode_token
 from database import UPLOADS_DIR
+from cache_helper import clear_note_caches
 
 notes_bp = Blueprint('notes', __name__)
 
@@ -17,7 +18,30 @@ def _sanitize_fts_query(query):
     words = sanitized.split()
     if not words:
         return None
-    return ' '.join(f'"{w}"' for w in words)
+    return ' '.join(f'"{w}"*' for w in words)
+
+def _can_user_view_note(note, user):
+    """Check whether a user payload has permission to view the specified note."""
+    if not note:
+        return False
+    if not user:
+        return note.get('status') == 'published' and note.get('approved') == 1 and note.get('visibility') == 'global'
+    user_id = user.get('sub')
+    role = user.get('role')
+    teams = user.get('teams', [])
+    if role == 'admin':
+        return True
+    is_creator = (user_id == note.get('created_by'))
+    is_moderator = (role == 'moderator')
+    if note.get('status') == 'draft' and not is_creator:
+        return False
+    if not note.get('approved') and not is_creator and not is_moderator:
+        return False
+    is_global = (note.get('visibility') == 'global')
+    has_team_access = (note.get('team_id') in teams)
+    if not is_global and not has_team_access:
+        return False
+    return True
 
 def _get_tags_for_note(cursor, note_id):
     cursor.execute("""
@@ -47,6 +71,19 @@ def _get_steps_for_note(cursor, note_id):
         ORDER BY step_order
     """, (note_id,))
     steps = [dict(row) for row in cursor.fetchall()]
+    if not steps:
+        return []
+
+    cursor.execute("""
+        SELECT id, step_id, filename, original_name FROM note_images
+        WHERE note_id = ? AND step_id IS NOT NULL ORDER BY id
+    """, (note_id,))
+    images_by_step = {}
+    for r in cursor.fetchall():
+        images_by_step.setdefault(r['step_id'], []).append(
+            {'id': r['id'], 'url': f'/uploads/{r["filename"]}', 'name': r['original_name']}
+        )
+
     for step in steps:
         if step.get('blocks'):
             try:
@@ -55,16 +92,7 @@ def _get_steps_for_note(cursor, note_id):
                 step['blocks'] = []
         else:
             step['blocks'] = []
-        
-        cursor.execute("""
-            SELECT id, filename, original_name FROM note_images
-            WHERE note_id = ? AND step_id = ?
-            ORDER BY id
-        """, (note_id, step['id']))
-        step['images'] = [
-            {'id': r['id'], 'url': f'/uploads/{r["filename"]}', 'name': r['original_name']}
-            for r in cursor.fetchall()
-        ]
+        step['images'] = images_by_step.get(step['id'], [])
     return steps
 
 def _get_note_images(cursor, note_id):
@@ -137,8 +165,8 @@ def get_notes():
         status = request.args.get('status', '').strip()
         favorite_only = request.args.get('favorite', '').strip().lower() == 'true'
 
-        page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 15, type=int)
+        page = max(1, request.args.get('page', 1, type=int) or 1)
+        limit = max(1, min(100, request.args.get('limit', 15, type=int) or 15))
         offset = (page - 1) * limit
 
         cursor = conn.cursor()
@@ -148,7 +176,7 @@ def get_notes():
                    n.category_id, c.name as category_name,
                    n.created_at, n.updated_at, n.created_by, n.reference_links,
                    u.username as created_by_username, n.approved, n.status,
-                   n.team_id, n.visibility, tm.name as team_name,
+                   n.team_id, n.visibility, tm.name as team_name, n.is_pinned,
                    (SELECT COUNT(*) FROM note_steps WHERE note_id = n.id) as step_count
             FROM notes n
             LEFT JOIN categories c ON n.category_id = c.id
@@ -159,18 +187,18 @@ def get_notes():
         params = []
 
         if query:
-            words = [w for w in re.sub(r'[^\w\s]', ' ', query).split() if w]
-            if words:
-                search_conditions = []
-                for word in words:
-                    search_pattern = f"%{word}%"
-                    search_conditions.append("(n.title LIKE ? OR n.command LIKE ? OR n.description LIKE ?)")
-                    params.extend([search_pattern, search_pattern, search_pattern])
-                conditions.append("(" + " AND ".join(search_conditions) + ")")
+            fts_q = _sanitize_fts_query(query)
+            if fts_q:
+                conditions.append("n.id IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)")
+                params.append(fts_q)
+            else:
+                search_pattern = f"%{query}%"
+                conditions.append("(n.title LIKE ? OR n.command LIKE ? OR n.description LIKE ?)")
+                params.extend([search_pattern, search_pattern, search_pattern])
 
         if category:
-            conditions.append("c.id = ?")
-            params.append(category)
+            conditions.append("(c.id = ? OR c.parent_id = ?)")
+            params.extend([category, category])
 
         if tag:
             base_select += " LEFT JOIN note_tags nt ON nt.note_id = n.id LEFT JOIN tags tg ON tg.id = nt.tag_id"
@@ -213,11 +241,24 @@ def get_notes():
                 return jsonify({'message': 'Authentication required!'}), 401
             conditions.append("n.status = 'draft' AND n.created_by = ?")
             params.append(user_id)
+        elif status == 'my_notes':
+            if not user_id:
+                return jsonify({'message': 'Authentication required!'}), 401
+            conditions.append("n.created_by = ? AND n.status = 'published'")
+            params.append(user_id)
+        elif status == 'rejected':
+            if not user_id:
+                return jsonify({'message': 'Authentication required!'}), 401
+            if user_role in ['admin', 'moderator']:
+                conditions.append("n.approved = -1")
+            else:
+                conditions.append("n.approved = -1 AND n.created_by = ?")
+                params.append(user_id)
         else:
             conditions.append("n.approved = 1 AND n.status = 'published'")
 
-        # Enforce team isolation for non-drafts
-        if status != 'draft' and user_role != 'admin':
+        # Enforce team isolation for non-drafts, non-my-notes, non-rejected
+        if status not in ['draft', 'my_notes', 'rejected'] and user_role != 'admin':
             if user_team_ids:
                 placeholders = ','.join('?' for _ in user_team_ids)
                 conditions.append(f"(n.visibility = 'global' OR n.team_id IN ({placeholders}))")
@@ -235,7 +276,7 @@ def get_notes():
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
 
-        sql += " ORDER BY n.created_at DESC LIMIT ? OFFSET ?"
+        sql += " ORDER BY n.is_pinned DESC, n.created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         cursor.execute(sql, params)
@@ -283,7 +324,7 @@ def get_notes():
 def create_note():
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         title = data.get('title', '').strip()
         note_type = data.get('note_type', 'command')
         command = data.get('command', '').strip()
@@ -344,8 +385,10 @@ def create_note():
         if tags:
             _link_tags_to_note(cursor, conn, note_id, tags)
 
-        log_audit(conn, note_id, 'CREATED', request.user['username'], f"Note created (approved={bool(approved)})")
+        log_detail = "Note created (Draft)" if status == 'draft' else f"Note created (approved={bool(approved)})"
+        log_audit(conn, note_id, 'CREATED', request.user['username'], log_detail)
         conn.commit()
+        clear_note_caches()
         message = 'Note created' if approved == 1 else 'Note created and is pending approval'
         return jsonify({'message': message, 'id': note_id, 'approved': bool(approved)}), 201
     finally:
@@ -438,7 +481,7 @@ def get_note_by_id(note_id):
 def update_note(note_id):
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         title = data.get('title', '').strip()
         note_type = data.get('note_type', 'command')
         command = data.get('command', '').strip()
@@ -522,7 +565,12 @@ def update_note(note_id):
         if tags:
             _link_tags_to_note(cursor, conn, note_id, tags)
 
+        if not is_autosave:
+            log_detail = f"Note updated (approved={bool(approved)})" if status != 'draft' else "Note updated (Draft)"
+            log_audit(conn, note_id, 'UPDATED', request.user['username'], log_detail)
+
         conn.commit()
+        clear_note_caches()
         return jsonify({'message': 'Note updated successfully'})
     finally:
         conn.close()
@@ -556,6 +604,7 @@ def delete_note(note_id):
         cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
         log_audit(conn, note_id, 'DELETED', request.user['username'], f"Note deleted: {note['title']}")
         conn.commit()
+        clear_note_caches()
 
         # Remove image files from disk
         for fname in image_files:
@@ -573,9 +622,13 @@ def get_note_revisions(note_id):
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM notes WHERE id = ?", (note_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        if not note:
             return jsonify({'message': 'Note not found'}), 404
+        
+        if not _can_user_view_note(dict(note), request.user):
+            return jsonify({'message': 'Access denied'}), 403
         
         cursor.execute("""
             SELECT r.id, r.note_id, r.title, r.command, r.description, r.note_type, r.category_id, r.reference_links, r.steps, r.created_at, r.created_by, u.username as created_by_username
@@ -651,6 +704,7 @@ def restore_note_revision(note_id, rev_id):
 
         log_audit(conn, note_id, 'RESTORED', request.user['username'], f"Restored note to revision {rev_id}")
         conn.commit()
+        clear_note_caches()
         return jsonify({'message': 'Revision restored successfully'})
     finally:
         conn.close()
@@ -661,9 +715,15 @@ def upload_image(note_id):
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM notes WHERE id = ?", (note_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, created_by, team_id, visibility FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        if not note:
             return jsonify({'message': 'Note not found'}), 404
+
+        user_role = request.user.get('role')
+        user_id = request.user.get('sub')
+        if user_role not in ['admin', 'moderator'] and user_id != note['created_by']:
+            return jsonify({'message': 'Permission denied: Cannot add attachments to this note'}), 403
 
         if 'file' not in request.files:
             return jsonify({'message': 'No file provided'}), 400
@@ -750,7 +810,34 @@ def approve_note(note_id):
         cursor.execute("UPDATE notes SET approved = 1 WHERE id = ?", (note_id,))
         log_audit(conn, note_id, 'APPROVED', request.user['username'], "Note approved")
         conn.commit()
+        clear_note_caches()
         return jsonify({'message': 'Note approved successfully'})
+    finally:
+        conn.close()
+
+@notes_bp.route('/api/notes/<int:note_id>/reject', methods=['POST'])
+@login_required
+def reject_note(note_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT approved, title FROM notes WHERE id = ?", (note_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'message': 'Note not found'}), 404
+
+        user_role = request.user.get('role')
+        if user_role not in ['admin', 'moderator']:
+            return jsonify({'message': 'Permission denied'}), 403
+
+        data = request.json or {}
+        reason = data.get('reason', '').strip() or 'Note does not meet guidelines'
+            
+        cursor.execute("UPDATE notes SET approved = -1 WHERE id = ?", (note_id,))
+        log_audit(conn, note_id, 'REJECTED', request.user['username'], f"Note rejected: {reason}")
+        conn.commit()
+        clear_note_caches()
+        return jsonify({'message': 'Note rejected successfully'})
     finally:
         conn.close()
 
@@ -781,6 +868,30 @@ def toggle_favorite(note_id):
     finally:
         conn.close()
 
+@notes_bp.route('/api/notes/<int:note_id>/pin', methods=['POST'])
+@login_required
+def toggle_pin_note(note_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, created_by, is_pinned FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        if not note:
+            return jsonify({'message': 'Note not found'}), 404
+
+        user_role = request.user.get('role')
+        user_id = request.user['sub']
+        if user_role not in ['admin', 'moderator'] and note['created_by'] != user_id:
+            return jsonify({'message': 'Permission denied'}), 403
+
+        new_pinned = 0 if note['is_pinned'] else 1
+        cursor.execute("UPDATE notes SET is_pinned = ? WHERE id = ?", (new_pinned, note_id))
+        conn.commit()
+        clear_note_caches()
+        return jsonify({'is_pinned': bool(new_pinned)})
+    finally:
+        conn.close()
+
 @notes_bp.route('/api/notes/frequent', methods=['GET'])
 @login_required
 def get_frequent_notes():
@@ -801,3 +912,65 @@ def get_frequent_notes():
         return jsonify([dict(r) for r in rows])
     finally:
         conn.close()
+
+@notes_bp.route('/api/notes/<int:note_id>/export', methods=['GET'])
+@login_required
+def export_note_markdown(note_id):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT n.*, c.name as category_name, u.username as author_name, tm.name as team_name
+            FROM notes n
+            LEFT JOIN categories c ON n.category_id = c.id
+            LEFT JOIN users u ON n.created_by = u.id
+            LEFT JOIN teams tm ON n.team_id = tm.id
+            WHERE n.id = ?
+        """, (note_id,))
+        note = cursor.fetchone()
+        if not note:
+            return jsonify({'message': 'Note not found'}), 404
+
+        if not _can_user_view_note(dict(note), request.user):
+            return jsonify({'message': 'Access denied'}), 403
+
+        tags = _get_tags_for_note(cursor, note_id)
+        
+        cursor.execute("SELECT * FROM note_steps WHERE note_id = ? ORDER BY step_order ASC", (note_id,))
+        steps = [dict(r) for r in cursor.fetchall()]
+
+        # Format Markdown content
+        md = f"# {note['title']}\n\n"
+        md += f"- **Category**: {note['category_name'] or 'Uncategorized'}\n"
+        md += f"- **Author**: {note['author_name'] or 'Unknown'}\n"
+        md += f"- **Type**: {note['note_type'].capitalize()}\n"
+        if tags:
+            md += f"- **Tags**: {', '.join(tags)}\n"
+        if note['team_name']:
+            md += f"- **Team**: {note['team_name']}\n"
+        md += f"- **Date**: {note['created_at']}\n\n"
+
+        if note['command']:
+            md += f"## Command / Code\n```\n{note['command']}\n```\n\n"
+
+        if note['description']:
+            md += f"## Description\n{note['description']}\n\n"
+
+        if steps:
+            md += "## Procedure Steps\n\n"
+            for i, s in enumerate(steps, 1):
+                md += f"### Step {i}: {s.get('title') or 'Step'}\n"
+                if s.get('command'):
+                    md += f"```\n{s.get('command')}\n```\n"
+                if s.get('description'):
+                    md += f"{s.get('description')}\n"
+                md += "\n"
+
+        clean_title = re.sub(r'[^a-zA-Z0-9_-]', '_', note['title']).lower()
+        response = make_response(md)
+        response.headers["Content-Disposition"] = f"attachment; filename={clean_title}.md"
+        response.headers["Content-Type"] = "text/markdown; charset=utf-8"
+        return response
+    finally:
+        conn.close()
+

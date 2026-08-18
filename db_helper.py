@@ -10,16 +10,35 @@ def get_db():
         g.db_connections.append(conn)
     return conn
 
+import time
+
+_CACHED_BASE_URL = None
+_CACHED_BASE_URL_TIME = 0
+
+def invalidate_base_url_cache():
+    global _CACHED_BASE_URL, _CACHED_BASE_URL_TIME
+    _CACHED_BASE_URL = None
+    _CACHED_BASE_URL_TIME = 0
+
 def get_base_url():
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = 'reverse_proxy_url'")
-    row = cursor.fetchone()
-    conn.close()
-    url = row['value'] if row and row['value'] else '/'
+    global _CACHED_BASE_URL, _CACHED_BASE_URL_TIME
+    now = time.time()
+    if _CACHED_BASE_URL is not None and (now - _CACHED_BASE_URL_TIME) < 60:
+        return _CACHED_BASE_URL
+    try:
+        conn = _orig_get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'reverse_proxy_url'")
+        row = cursor.fetchone()
+        conn.close()
+        url = row['value'] if row and row['value'] else '/'
+    except Exception:
+        url = '/'
     if not url.endswith('/'):
         url += '/'
-    return url
+    _CACHED_BASE_URL = url
+    _CACHED_BASE_URL_TIME = now
+    return _CACHED_BASE_URL
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx'}
 

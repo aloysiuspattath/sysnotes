@@ -15,6 +15,10 @@ auth_bp = Blueprint('auth', __name__)
 
 def check_ad_login(username, password):
     url = os.environ.get('AD_SERVER_URL', 'https://10.250.7.210/sso/adloginwithRoles.asmx')
+    ca_bundle = os.environ.get('AD_CA_BUNDLE', False)
+    # If ca_bundle is a string path and exists, use it; otherwise fallback to bool check
+    if isinstance(ca_bundle, str) and not os.path.exists(ca_bundle):
+        ca_bundle = False
     username = html.escape(username)
     password = html.escape(password)
 
@@ -33,7 +37,7 @@ def check_ad_login(username, password):
     headers = {'Content-Type': 'application/soap+xml'}
 
     try:
-        response = requests.post(url, headers=headers, data=payload, verify=False, timeout=5)
+        response = requests.post(url, headers=headers, data=payload, verify=ca_bundle, timeout=5)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"AD server connection failed: {e}")
@@ -61,7 +65,7 @@ def validate_password(password):
 def login():
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         username = data.get('username')
         password = data.get('password')
         requested_login_type = data.get('login_type')
@@ -145,7 +149,7 @@ def login():
 def change_password():
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         old_password = data.get('old_password')
         new_password = data.get('new_password')
 
@@ -175,7 +179,7 @@ def change_password():
 def admin_reset_password(user_id):
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         new_password = data.get('password')
         if not new_password or not new_password.strip():
             return jsonify({'message': 'Password cannot be empty'}), 400
@@ -197,3 +201,14 @@ def admin_reset_password(user_id):
         return jsonify({'message': 'Password reset successfully'})
     finally:
         conn.close()
+
+@auth_bp.route('/api/auth/refresh', methods=['POST'])
+@login_required
+def refresh_token_route():
+    token = generate_token(request.user['sub'], request.user['username'], request.user['role'])
+    return jsonify({
+        'token': token,
+        'role': request.user['role'],
+        'username': request.user['username']
+    })
+

@@ -32,6 +32,11 @@ venv/
 
 # Server runtime logs
 *.log
+error_log.txt
 
 # SSL certificates
 *.pem
+
+# Zip archives and scratch
+*.zip
+scratch/

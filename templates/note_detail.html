@@ -1255,23 +1255,36 @@
             }
 
             if (isDocument && note.command) {
+                const isWebUrl = note.command.startsWith('http://') || note.command.startsWith('https://');
+                const cleanPath = note.command.replace(/^file:\/\/\/?/i, '');
                 mainHtml += `<div class="note-images-section">
-                    <div class="steps-title" style="margin-bottom:10px;">External Link / Network Path</div>
-                    <div class="note-doc-preview" style="background-color: var(--bg-tertiary); padding: 15px; border:1px solid var(--border); border-radius: var(--radius-md); display:flex; align-items:center; gap:15px;">
-                        <div class="note-doc-icon">
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                    <div class="steps-title" style="margin-bottom:10px;">${isWebUrl ? 'External Web Link' : 'Local File / Network Share Path'}</div>
+                    <div class="note-doc-preview" style="background-color: var(--bg-tertiary); padding: 16px; border:1px solid var(--border); border-radius: var(--radius-md); display:flex; align-items:center; gap:14px;">
+                        <div class="note-doc-icon" style="flex-shrink:0;">
+                            ${isWebUrl ? `
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                            ` : `
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            `}
                         </div>
                         <div class="note-doc-details" style="flex:1; word-break:break-all;">
-                            <p class="note-doc-name" style="margin:0; font-weight:600; font-size:15px; color:var(--text);">${esc(note.command)}</p>
+                            <p class="note-doc-name" style="margin:0 0 4px; font-weight:600; font-size:14px; font-family:var(--font-mono); color:var(--text);">${esc(note.command)}</p>
+                            <p style="margin:0; font-size:0.75rem; color:var(--text-2);">${isWebUrl ? 'Click below to open in a new tab' : '💡 Local / UNC file path. Click "Copy Path" below and paste into Windows Explorer or Run (Win+R) to open.'}</p>
                         </div>
                     </div>
-                    <div class="note-actions" style="margin-top: 15px; display:flex; gap:10px;">
-                        <a href="${note.command.startsWith('http') ? esc(note.command) : 'file:///' + esc(note.command).replace(/\\\\/g, '/')}" target="_blank" class="btn btn-outline">
-                            Open Link
-                        </a>
-                        <button type="button" class="btn btn-outline" onclick="copyText('${esc(note.command).replace(/\\\\/g, '\\\\\\\\')}', this)">
-                            Copy Path
-                        </button>
+                    <div class="note-actions" style="margin-top: 12px; display:flex; gap:10px; align-items:center;">
+                        ${isWebUrl ? `
+                            <a href="${esc(note.command)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline">
+                                🌐 Open Link ↗
+                            </a>
+                            <button type="button" class="btn btn-outline copy-path-btn" data-path="${esc(note.command)}">
+                                📋 Copy Link
+                            </button>
+                        ` : `
+                            <button type="button" class="btn btn-outline copy-path-btn" data-path="${esc(cleanPath)}">
+                                📋 Copy File Path
+                            </button>
+                        `}
                     </div>
                 </div>`;
             }
@@ -1437,6 +1450,10 @@
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                         Copy Share Link
                     </button>
+                    <a href="/api/notes/${noteId}/export" target="_blank" class="bento-btn" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export as Markdown (.md)
+                    </a>
                     <button class="bento-btn" onclick="window.print()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                         Print / Save PDF
@@ -1561,10 +1578,11 @@
                     // Format approved flag states to human readable text with emojis
                     formatted = formatted.replace(/\(?approved=True\)?/gi, '(Approved ✅)');
                     formatted = formatted.replace(/\(?approved=False\)?/gi, '(Pending Approval ⏳)');
+                    formatted = formatted.replace(/\(?Draft\)?/gi, '(Draft 📝)');
                     
                     // Add friendly emojis for standard actions
                     if (action === 'APPROVED' && !formatted.includes('✅')) formatted += ' ✅';
-                    if (action === 'CREATED' && !formatted.includes('✅') && !formatted.includes('⏳')) formatted += ' 📝';
+                    if (action === 'CREATED' && !formatted.includes('✅') && !formatted.includes('⏳') && !formatted.includes('📝')) formatted += ' 📝';
                     if (action === 'DELETED') formatted += ' ❌';
                     if (action === 'RESTORED') formatted += ' ↩️';
                     return formatted;

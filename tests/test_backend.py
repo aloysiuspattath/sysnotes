@@ -23,7 +23,7 @@ class BackendTestCase(unittest.TestCase):
         
         # Configure app
         flask_app.app.config['TESTING'] = True
-        flask_app.app.config['SECRET_KEY'] = 'test-secret-key-12345'
+        flask_app.app.config['SECRET_KEY'] = 'test-secret-key-super-secure-32bytes-long!!'
         
         # Initialize test DB schema
         with flask_app.app.app_context():
@@ -593,6 +593,145 @@ class BackendTestCase(unittest.TestCase):
         self.cursor.execute("SELECT last_active FROM users WHERE id = ?", (self.author1_id,))
         row = self.cursor.fetchone()
         self.assertIsNotNone(row['last_active'])
+
+    def test_admin_analytics_endpoint(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        res = self.client.get('/api/admin/analytics', headers=headers_admin)
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn('total_users', data)
+        self.assertIn('total_views', data)
+        self.assertIn('active_users_24h', data)
+        self.assertIn('most_visited', data)
+        self.assertIn('recent_views', data)
+        self.assertIn('user_contributions', data)
+
+    def test_category_reorder_and_nesting(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        # 1. Create 2 categories
+        res1 = self.client.post('/api/categories', headers=headers_admin, json={'name': 'Parent Cat'})
+        self.assertEqual(res1.status_code, 201)
+        parent_id = res1.get_json()['id']
+
+        res2 = self.client.post('/api/categories', headers=headers_admin, json={'name': 'Child Cat', 'parent_id': parent_id})
+        self.assertEqual(res2.status_code, 201)
+        child_id = res2.get_json()['id']
+
+        # 2. Reorder categories
+        reorder_payload = [
+            {'id': child_id, 'sort_order': 0, 'parent_id': parent_id},
+            {'id': parent_id, 'sort_order': 1, 'parent_id': None}
+        ]
+        res_reorder = self.client.post('/api/categories/reorder', headers=headers_admin, json=reorder_payload)
+        self.assertEqual(res_reorder.status_code, 200)
+
+        # 3. Verify order in get_categories
+        res_list = self.client.get('/api/categories')
+        self.assertEqual(res_list.status_code, 200)
+        cats = res_list.get_json()
+        child_item = next(c for c in cats if c['id'] == child_id)
+        self.assertEqual(child_item['parent_id'], parent_id)
+        self.assertEqual(child_item['sort_order'], 0)
+
+    def test_team_specific_categories(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        
+        # 1. Create a team
+        res_team = self.client.post('/api/admin/teams', headers=headers_admin, json={
+            'name': 'DevOps Engineering',
+            'description': 'DevOps team for cloud & infra'
+        })
+        self.assertEqual(res_team.status_code, 201)
+        team_id = res_team.get_json()['id']
+
+        # 2. Create a team-specific category
+        res_cat = self.client.post('/api/categories', headers=headers_admin, json={
+            'name': 'Kubernetes Operations',
+            'team_id': team_id
+        })
+        self.assertEqual(res_cat.status_code, 201)
+        cat_id = res_cat.get_json()['id']
+
+        # 3. Fetch categories and verify team assignment
+        res_list = self.client.get('/api/categories')
+        self.assertEqual(res_list.status_code, 200)
+        cats = res_list.get_json()
+        team_cat = next(c for c in cats if c['id'] == cat_id)
+        self.assertEqual(team_cat['team_id'], team_id)
+        self.assertEqual(team_cat['team_name'], 'DevOps Engineering')
+
+        # 4. Update category to Global
+        res_update = self.client.put(f'/api/categories/{cat_id}', headers=headers_admin, json={
+            'name': 'Kubernetes Operations',
+            'team_id': None
+        })
+        self.assertEqual(res_update.status_code, 200)
+
+        # 5. Verify update
+        res_list2 = self.client.get('/api/categories')
+        cats2 = res_list2.get_json()
+        updated_cat = next(c for c in cats2 if c['id'] == cat_id)
+        self.assertIsNone(updated_cat['team_id'])
+
+    def test_note_export_and_revisions_authorization(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        headers_author = {'Authorization': 'Bearer ' + self.author1_token}
+
+        # 1. Author creates a draft note
+        res_create = self.client.post('/api/notes', headers=headers_author, json={
+            'title': 'Secret Author Draft',
+            'note_type': 'command',
+            'command': 'cat /etc/shadow',
+            'description': 'Private draft command',
+            'status': 'draft'
+        })
+        self.assertEqual(res_create.status_code, 201)
+        note_id = res_create.get_json()['id']
+
+        # 2. Unauthenticated user cannot export or view revisions
+        res_anon_exp = self.client.get(f'/api/notes/{note_id}/export')
+        self.assertEqual(res_anon_exp.status_code, 401)
+
+        res_anon_rev = self.client.get(f'/api/notes/{note_id}/revisions')
+        self.assertEqual(res_anon_rev.status_code, 401)
+
+        # 3. Author can export their own draft
+        res_auth_exp = self.client.get(f'/api/notes/{note_id}/export', headers=headers_author)
+        self.assertEqual(res_auth_exp.status_code, 200)
+        self.assertIn('Secret Author Draft', res_auth_exp.get_data(as_text=True))
+
+        # 4. Author can view their own revisions
+        res_auth_rev = self.client.get(f'/api/notes/{note_id}/revisions', headers=headers_author)
+        self.assertEqual(res_auth_rev.status_code, 200)
+
+        # 5. Admin can export and view revisions
+        res_adm_exp = self.client.get(f'/api/notes/{note_id}/export', headers=headers_admin)
+        self.assertEqual(res_adm_exp.status_code, 200)
+
+    def test_backup_and_restore_sqlite_online(self):
+        headers_admin = {'Authorization': 'Bearer ' + self.admin_token}
+        headers_author = {'Authorization': 'Bearer ' + self.author1_token}
+
+        # 1. Non-admin cannot backup
+        res_auth_bak = self.client.get('/api/backup', headers=headers_author)
+        self.assertEqual(res_auth_bak.status_code, 403)
+
+        # 2. Admin can backup
+        res_adm_bak = self.client.get('/api/backup', headers=headers_admin)
+        self.assertEqual(res_adm_bak.status_code, 200)
+        self.assertTrue(len(res_adm_bak.data) > 0)
+
+        # 3. Non-admin cannot restore
+        import io
+        fake_file = (io.BytesIO(res_adm_bak.data), 'backup.db')
+        res_auth_rst = self.client.post('/api/restore', headers=headers_author, data={'file': fake_file}, content_type='multipart/form-data')
+        self.assertEqual(res_auth_rst.status_code, 403)
+
+        # 4. Admin restores from valid backup
+        fake_file2 = (io.BytesIO(res_adm_bak.data), 'backup.db')
+        res_adm_rst = self.client.post('/api/restore', headers=headers_admin, data={'file': fake_file2}, content_type='multipart/form-data')
+        self.assertEqual(res_adm_rst.status_code, 200)
+        self.assertEqual(res_adm_rst.get_json()['message'], 'Database restored successfully')
 
 if __name__ == '__main__':
     unittest.main()

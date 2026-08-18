@@ -35,10 +35,18 @@ def run_backup_scheduler(db_path):
                 if not os.path.exists(backup_dir):
                     os.makedirs(backup_dir, exist_ok=True)
 
-                # Create backup
+                # Create safe online backup
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_file = os.path.join(backup_dir, f"sysadmin_notes_{timestamp}.db")
-                shutil.copy2(db_path, backup_file)
+                
+                src_conn = sqlite3.connect(db_path, timeout=30.0)
+                dest_conn = sqlite3.connect(backup_file)
+                try:
+                    with dest_conn:
+                        src_conn.backup(dest_conn, pages=100, sleep=0.01)
+                finally:
+                    dest_conn.close()
+                    src_conn.close()
                 print(f"Backup created: {backup_file}")
 
                 # Clean old backups
@@ -46,10 +54,13 @@ def run_backup_scheduler(db_path):
                 for f in os.listdir(backup_dir):
                     if f.startswith("sysadmin_notes_") and f.endswith(".db"):
                         filepath = os.path.join(backup_dir, f)
-                        file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
-                        if file_time < cutoff:
-                            os.remove(filepath)
-                            print(f"Removed old backup: {filepath}")
+                        try:
+                            file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+                            if file_time < cutoff:
+                                os.remove(filepath)
+                                print(f"Removed old backup: {filepath}")
+                        except Exception as ce:
+                            print(f"Failed to remove old backup {filepath}: {ce}")
         except Exception as e:
             print(f"Backup failed: {e}")
 

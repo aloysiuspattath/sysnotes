@@ -62,3 +62,10 @@ categories_cache = InMemoryCache(default_ttl=120)    # cache categories for 2 mi
 tags_cache = InMemoryCache(default_ttl=120)          # cache tags list for 2 minutes
 stats_cache = InMemoryCache(default_ttl=60)          # cache stats summary for 1 minute
 activity_cache = InMemoryCache(default_ttl=60)       # caches user last DB activity update to prevent write spam
+
+def clear_note_caches():
+    """Clear all caches that store note-dependent counters and data."""
+    categories_cache.clear()
+    stats_cache.clear()
+    tags_cache.clear()
+

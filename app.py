@@ -5,7 +5,7 @@ GitHub: https://github.com/aloysiuspattath
 """
 import os
 import secrets
-from flask import Flask, request, g, has_app_context
+from flask import Flask, request, g, has_app_context, jsonify
 from dotenv import load_dotenv
 
 from database import init_db
@@ -71,11 +71,18 @@ def force_https():
 @app.errorhandler(Exception)
 def handle_exception(e):
     from werkzeug.exceptions import HTTPException
-    if isinstance(e, HTTPException):
-        return e
     import traceback
-    with open('error_log.txt', 'a') as f:
-        f.write(traceback.format_exc() + '\n')
+    try:
+        with open('error_log.txt', 'a', encoding='utf-8') as f:
+            f.write(traceback.format_exc() + '\n')
+    except Exception:
+        pass
+    if isinstance(e, HTTPException):
+        if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+            return jsonify({'message': e.description, 'code': e.code}), e.code
+        return e
+    if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+        return jsonify({'message': 'Internal Server Error'}), 500
     return "Internal Server Error", 500
 
 @app.after_request

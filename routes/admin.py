@@ -4,14 +4,16 @@ import time
 import shutil
 import secrets
 import sqlite3
+import io
+import csv
 from datetime import datetime
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify, send_from_directory, make_response
 from werkzeug.security import generate_password_hash
 from db_helper import get_db, allowed_file, DATABASE_PATH
 from auth import admin_required, login_required
 from routes.auth import validate_password
 from database import get_user_teams, get_all_teams, create_team, delete_team
-from cache_helper import settings_cache, categories_cache, tags_cache, stats_cache, activity_cache
+from cache_helper import settings_cache, categories_cache, tags_cache, stats_cache, activity_cache, clear_note_caches
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -146,10 +148,26 @@ def get_users():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, role, auth_type FROM users")
+        cursor.execute("""
+            SELECT u.id, u.username, u.role, u.auth_type,
+                   (SELECT COUNT(*) FROM notes WHERE created_by = u.id) as total_note_count,
+                   (SELECT COUNT(*) FROM notes WHERE created_by = u.id AND approved = 1 AND status = 'published') as published_note_count
+            FROM users u
+            ORDER BY u.id ASC
+        """)
         users = [dict(row) for row in cursor.fetchall()]
+        cursor.execute("""
+            SELECT ut.user_id, t.id, t.name, t.description
+            FROM user_teams ut
+            JOIN teams t ON ut.team_id = t.id
+        """)
+        teams_map = {}
+        for r in cursor.fetchall():
+            teams_map.setdefault(r['user_id'], []).append({
+                'id': r['id'], 'name': r['name'], 'description': r['description']
+            })
         for u in users:
-            u['teams'] = get_user_teams(u['id'])
+            u['teams'] = teams_map.get(u['id'], [])
         return jsonify(users)
     finally:
         conn.close()
@@ -159,7 +177,7 @@ def get_users():
 def create_user():
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         username = data.get('username')
         password = data.get('password')
         role = data.get('role', 'author')
@@ -206,7 +224,7 @@ def create_user():
 def update_user(user_id):
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         role = data.get('role')
         team_ids = data.get('team_ids')
 
@@ -241,7 +259,7 @@ def update_user_role(user_id):
         if request.user['sub'] == user_id:
             return jsonify({'message': 'Cannot change your own role'}), 400
 
-        data = request.json
+        data = request.get_json(silent=True) or {}
         new_role = data.get('role')
         if new_role not in ['author', 'moderator', 'admin']:
             return jsonify({'message': 'Can only change role to author, moderator, or admin'}), 400
@@ -259,7 +277,7 @@ def update_user_role(user_id):
         cursor.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
         conn.commit()
 
-        return jsonify({'message': 'Role updated successfully'})
+        return jsonify({'message': 'User role updated successfully'})
     finally:
         conn.close()
 
@@ -285,8 +303,8 @@ def delete_user(user_id):
 # ================= TEAMS ================= #
 
 @admin_bp.route('/api/admin/teams', methods=['GET'])
-@login_required
-def get_teams_list():
+@admin_required
+def list_teams():
     try:
         teams = get_all_teams()
         return jsonify(teams)
@@ -297,7 +315,7 @@ def get_teams_list():
 @admin_required
 def create_new_team():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         name = data.get('name', '').strip()
         description = data.get('description', '').strip()
         if not name:
@@ -343,7 +361,7 @@ def get_settings():
 def update_settings():
     conn = get_db()
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         cursor = conn.cursor()
 
         for key, value in data.items():
@@ -351,6 +369,8 @@ def update_settings():
 
         conn.commit()
         settings_cache.clear()
+        from db_helper import invalidate_base_url_cache
+        invalidate_base_url_cache()
         return jsonify({'message': 'Settings updated'})
     finally:
         conn.close()
@@ -366,11 +386,12 @@ def get_categories():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT c.id, c.name, c.enabled, COUNT(n.id) as note_count
+            SELECT c.id, c.name, c.enabled, c.parent_id, c.team_id, t.name as team_name, COALESCE(c.sort_order, 0) as sort_order, COUNT(n.id) as note_count
             FROM categories c
+            LEFT JOIN teams t ON c.team_id = t.id
             LEFT JOIN notes n ON n.category_id = c.id
-            GROUP BY c.id, c.name, c.enabled
-            ORDER BY c.name
+            GROUP BY c.id, c.name, c.enabled, c.parent_id, c.team_id, t.name, c.sort_order
+            ORDER BY COALESCE(c.sort_order, 0) ASC, c.name ASC
         """)
         categories = [dict(row) for row in cursor.fetchall()]
         categories_cache.set('categories', categories)
@@ -384,15 +405,22 @@ def get_categories():
 def create_category():
     conn = get_db()
     try:
-        data = request.json
+        data = request.json or {}
         name = data.get('name')
+        parent_id = data.get('parent_id') or None
+        team_id = data.get('team_id') or None
+        if team_id is not None:
+            try:
+                team_id = int(team_id)
+            except (ValueError, TypeError):
+                team_id = None
 
         if not name:
             return jsonify({'message': 'Category name required'}), 400
 
         cursor = conn.cursor()
         try:
-            cursor.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+            cursor.execute("INSERT INTO categories (name, parent_id, team_id) VALUES (?, ?, ?)", (name, parent_id, team_id))
             conn.commit()
             categories_cache.clear()
             return jsonify({'message': 'Category created', 'id': cursor.lastrowid}), 201
@@ -421,22 +449,68 @@ def delete_category(cat_id):
         conn.close()
 
 @admin_bp.route('/api/categories/<int:cat_id>', methods=['PUT'])
+@admin_bp.route('/api/categories/<int:cat_id>/toggle', methods=['PUT'])
 @login_required
 @admin_or_moderator_required
 def update_category(cat_id):
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT enabled FROM categories WHERE id = ?", (cat_id,))
+        cursor.execute("SELECT id, name, enabled, parent_id, team_id FROM categories WHERE id = ?", (cat_id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({'message': 'Category not found'}), 404
 
-        new_state = 0 if row['enabled'] else 1
-        cursor.execute("UPDATE categories SET enabled = ? WHERE id = ?", (new_state, cat_id))
+        data = request.get_json(silent=True) or {}
+        
+        # If toggling enabled
+        if request.path.endswith('/toggle') or 'toggle' in data:
+            new_state = 0 if row['enabled'] else 1
+            cursor.execute("UPDATE categories SET enabled = ? WHERE id = ?", (new_state, cat_id))
+        else:
+            new_name = data.get('name', row['name'])
+            new_parent_id = data.get('parent_id', row['parent_id'])
+            new_enabled = data.get('enabled', row['enabled'])
+            new_team_id = data.get('team_id', row['team_id'])
+            if new_team_id == '' or new_team_id == 'null':
+                new_team_id = None
+            elif new_team_id is not None:
+                try:
+                    new_team_id = int(new_team_id)
+                except (ValueError, TypeError):
+                    new_team_id = None
+
+            cursor.execute("UPDATE categories SET name = ?, parent_id = ?, enabled = ?, team_id = ? WHERE id = ?", 
+                           (new_name, new_parent_id, new_enabled, new_team_id, cat_id))
+
         conn.commit()
         categories_cache.clear()
-        return jsonify({'message': 'Category toggled', 'enabled': bool(new_state)})
+        return jsonify({'message': 'Category updated successfully'})
+    finally:
+        conn.close()
+
+@admin_bp.route('/api/categories/reorder', methods=['POST'])
+@login_required
+@admin_or_moderator_required
+def reorder_categories():
+    conn = get_db()
+    try:
+        items = request.json or []
+        if not isinstance(items, list):
+            return jsonify({'message': 'Invalid data format'}), 400
+        cursor = conn.cursor()
+        for idx, item in enumerate(items):
+            cat_id = item.get('id')
+            parent_id = item.get('parent_id')
+            sort_order = item.get('sort_order', idx)
+            if cat_id is not None:
+                cursor.execute(
+                    "UPDATE categories SET sort_order = ?, parent_id = ? WHERE id = ?",
+                    (sort_order, parent_id, cat_id)
+                )
+        conn.commit()
+        categories_cache.clear()
+        return jsonify({'message': 'Categories reordered successfully'})
     finally:
         conn.close()
 
@@ -506,7 +580,11 @@ def get_last_updated():
 @admin_bp.route('/api/backup', methods=['GET'])
 def backup_db():
     from auth import decode_token
-    token = request.args.get('token')
+    token = request.headers.get('Authorization')
+    if token and token.startswith('Bearer '):
+        token = token[7:]
+    if not token:
+        token = request.args.get('token')
     if not token:
         return jsonify({'message': 'Token is missing!'}), 401
     payload = decode_token(token)
@@ -514,9 +592,35 @@ def backup_db():
         return jsonify({'message': payload}), 401
     if payload.get('role') != 'admin':
         return jsonify({'message': 'Admin privilege required!'}), 403
-    db_dir = os.path.dirname(DATABASE_PATH)
-    filename = f"sysadmin_notes_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    return send_from_directory(db_dir, 'sysadmin_notes.db', as_attachment=True, download_name=filename)
+
+    import database
+    db_path = database.DATABASE_PATH
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"sysadmin_notes_backup_{timestamp}.db"
+    temp_backup = os.path.join(os.path.dirname(db_path) or '.', f"temp_backup_{timestamp}.db")
+    
+    src_conn = sqlite3.connect(db_path, timeout=30.0)
+    dest_conn = sqlite3.connect(temp_backup)
+    try:
+        with dest_conn:
+            src_conn.backup(dest_conn, pages=100, sleep=0.01)
+    finally:
+        dest_conn.close()
+        src_conn.close()
+    
+    try:
+        with open(temp_backup, 'rb') as f:
+            data = f.read()
+        response = make_response(data)
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Type'] = 'application/x-sqlite3'
+        return response
+    finally:
+        if os.path.exists(temp_backup):
+            try:
+                os.remove(temp_backup)
+            except Exception:
+                pass
 
 @admin_bp.route('/api/restore', methods=['POST'])
 @admin_required
@@ -527,7 +631,9 @@ def restore_db():
     if file.filename == '':
         return jsonify({'message': 'No selected file'}), 400
     if file and file.filename.endswith('.db'):
-        temp_path = DATABASE_PATH + '.tmp'
+        import database
+        db_path = database.DATABASE_PATH
+        temp_path = db_path + '.restore_tmp'
         file.save(temp_path)
         try:
             # Verify SQLite integrity and format
@@ -535,20 +641,37 @@ def restore_db():
             cursor = temp_conn.cursor()
             cursor.execute("PRAGMA integrity_check")
             check_result = cursor.fetchone()
-            temp_conn.close()
             
             if not check_result or check_result[0] != 'ok':
+                temp_conn.close()
                 raise ValueError("Database integrity check failed")
                 
-            # Safely replace active database
-            if os.path.exists(DATABASE_PATH):
-                os.remove(DATABASE_PATH)
-            os.rename(temp_path, DATABASE_PATH)
+            # Perform safe online backup from uploaded DB into active DB
+            target_conn = sqlite3.connect(db_path, timeout=30.0)
+            try:
+                with target_conn:
+                    temp_conn.backup(target_conn, pages=100)
+            finally:
+                target_conn.close()
+                temp_conn.close()
+                
+            # Clear all in-memory caches
+            clear_note_caches()
+            settings_cache.clear()
+            categories_cache.clear()
+            tags_cache.clear()
+            stats_cache.clear()
+            activity_cache.clear()
+            
             return jsonify({'message': 'Database restored successfully'})
         except Exception as e:
+            return jsonify({'message': f'Invalid database file or restore failed: {e}'}), 400
+        finally:
             if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return jsonify({'message': f'Invalid database file or integrity check failed: {e}'}), 400
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
     return jsonify({'message': 'Invalid file type. Must be a .db file'}), 400
 
 # ================= AUDIT LOGS ================= #
@@ -571,6 +694,14 @@ def get_note_audit(note_id):
     conn = get_db()
     try:
         cursor = conn.cursor()
+        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        if not note:
+            return jsonify({'message': 'Note not found'}), 404
+        from routes.notes import _can_user_view_note
+        if not _can_user_view_note(dict(note), request.user):
+            return jsonify({'message': 'Access denied'}), 403
+            
         cursor.execute("SELECT * FROM audit_logs WHERE note_id = ? ORDER BY timestamp DESC", (note_id,))
         logs = [dict(row) for row in cursor.fetchall()]
         return jsonify(logs)
@@ -591,10 +722,15 @@ def get_system_status():
         db_size_bytes = os.path.getsize(DATABASE_PATH) if os.path.exists(DATABASE_PATH) else 0
         cursor = conn.cursor()
         
-        cursor.execute("PRAGMA integrity_check")
-        integrity_row = cursor.fetchone()
-        db_integrity = integrity_row[0] if integrity_row else "unknown"
-        
+        # Cache integrity check for 5 minutes (300 seconds) unless force=true is requested
+        force_check = request.args.get('force') == 'true' or request.args.get('refresh') == '1'
+        db_integrity = None if force_check else stats_cache.get('db_integrity')
+        if not db_integrity:
+            cursor.execute("PRAGMA quick_check(1)")
+            integrity_row = cursor.fetchone()
+            db_integrity = integrity_row[0] if integrity_row else "unknown"
+            stats_cache.set('db_integrity', db_integrity, ttl=300)
+            
         cursor.execute("PRAGMA journal_mode")
         journal_row = cursor.fetchone()
         db_journal = journal_row[0] if journal_row else "unknown"
@@ -706,15 +842,59 @@ def get_analytics():
             LIMIT 5
         """)
         recent_views = [dict(row) for row in cursor.fetchall()]
+
+        # 6. User contributions
+        cursor.execute("""
+            SELECT u.username, u.role,
+                   COUNT(CASE WHEN n.approved = 1 AND n.status = 'published' THEN 1 END) as published_notes,
+                   COUNT(n.id) as total_notes
+            FROM users u
+            LEFT JOIN notes n ON n.created_by = u.id
+            GROUP BY u.id, u.username, u.role
+            ORDER BY published_notes DESC, total_notes DESC
+        """)
+        user_contributions = [dict(row) for row in cursor.fetchall()]
         
         return jsonify({
             'total_users': total_users,
             'total_views': total_views,
             'active_users_24h': active_users_24h,
             'most_visited': most_visited,
-            'recent_views': recent_views
+            'recent_views': recent_views,
+            'user_contributions': user_contributions
         })
     finally:
         conn.close()
+
+@admin_bp.route('/api/admin/analytics/export', methods=['GET'])
+@admin_required
+def export_analytics_csv():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT u.id, u.username, u.role, u.auth_type,
+                   (SELECT COUNT(*) FROM notes WHERE created_by = u.id AND approved = 1 AND status = 'published') as published_notes,
+                   (SELECT COUNT(*) FROM notes WHERE created_by = u.id) as total_notes,
+                   u.last_active
+            FROM users u
+            ORDER BY published_notes DESC, total_notes DESC
+        """)
+        rows = cursor.fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['User ID', 'Username', 'Role', 'Auth Type', 'Published Notes', 'Total Notes Created', 'Last Active'])
+        for r in rows:
+            writer.writerow([r['id'], r['username'], r['role'], r['auth_type'], r['published_notes'], r['total_notes'], r['last_active'] or 'Never'])
+
+        response = make_response(output.getvalue())
+        filename = f"sysnotes_analytics_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+        response.headers["Content-Type"] = "text/csv; charset=utf-8"
+        return response
+    finally:
+        conn.close()
+
 
 

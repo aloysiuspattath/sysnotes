@@ -28,9 +28,11 @@ def decode_token(token):
         # Convert 'sub' back to int for database lookups
         payload['sub'] = int(payload['sub'])
         return payload
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        print('JWT Expired:', e)
         return 'Signature expired. Please log in again.'
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print('JWT Invalid:', type(e), e)
         return 'Invalid token. Please log in again.'
 
 def update_user_activity(payload):
